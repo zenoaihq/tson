@@ -10,6 +10,7 @@ import {
   splitByDelimiter,
   buildSchemaMap,
   parseKeys,
+  parseKeySchema,
 } from './utils';
 
 /**
@@ -134,7 +135,7 @@ export function parseKeyedObject(content: string): TSONValue {
   const schemaMap = buildSchemaMap(keys);
 
   // Get actual field names (without schema notation)
-  const fieldNames = keys.map(k => k.split('(')[0]);
+  const fieldNames = keys.map(k => parseKeySchema(k).keyName);
 
   // If only one part, it's an error (no values)
   if (parts.length === 1) {
@@ -261,7 +262,7 @@ export function parseSchematizedValue(valueStr: string, schema: string[]): TSONO
   const nestedSchemaMap = buildSchemaMap(schema);
 
   // Get field names (without schema notation)
-  const fieldNames = schema.map(k => k.split('(')[0]);
+  const fieldNames = schema.map(k => parseKeySchema(k).keyName);
 
   // Build object
   const obj: TSONObject = {};

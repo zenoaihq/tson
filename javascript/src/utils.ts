@@ -307,12 +307,21 @@ export function parseKeySchema(keyString: string): KeySchema {
 
   // Check if key has nested schema
   if (!trimmed.includes('(')) {
+    // Unquote the key name if it's quoted
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      return { keyName: unescapeString(trimmed.slice(1, -1)), schema: null };
+    }
     return { keyName: trimmed, schema: null };
   }
 
   // Find the opening parenthesis
   const parenIdx = trimmed.indexOf('(');
-  const keyName = trimmed.slice(0, parenIdx).trim();
+  let keyName = trimmed.slice(0, parenIdx).trim();
+
+  // Unquote the key name if it's quoted
+  if (keyName.startsWith('"') && keyName.endsWith('"')) {
+    keyName = unescapeString(keyName.slice(1, -1));
+  }
 
   // Extract schema (everything between outermost parentheses)
   if (!trimmed.endsWith(')')) {
@@ -356,16 +365,50 @@ export function buildSchemaMap(keys: string[]): SchemaMap {
  * Format: key1,key2,key3 or key1,key2,key3#N
  */
 export function parseKeys(keysStr: string): ParsedKeys {
-  // Check for row count marker
-  if (keysStr.includes('#')) {
-    // Split from right in case # appears in key name
-    const lastHashIdx = keysStr.lastIndexOf('#');
-    const keysPart = keysStr.slice(0, lastHashIdx);
-    const countPart = keysStr.slice(lastHashIdx + 1).trim();
+  // Check for row count marker, respecting quotes
+  let hashIdx = -1;
+  let inQuotes = false;
+
+  // Scan backwards to find the last # that is NOT inside quotes
+  for (let i = keysStr.length - 1; i >= 0; i--) {
+    const char = keysStr[i];
+
+    if (char === '"') {
+      // Check for escaped quote (count preceding backslashes)
+      let backslashCount = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        if (keysStr[j] === '\\') {
+          backslashCount++;
+        } else {
+          break;
+        }
+      }
+
+      // If even number of backslashes, it's a real quote
+      if (backslashCount % 2 === 0) {
+        inQuotes = !inQuotes;
+      }
+    }
+
+    if (char === '#' && !inQuotes) {
+      hashIdx = i;
+      break;
+    }
+  }
+
+  if (hashIdx !== -1) {
+    // Found separator
+    const keysPart = keysStr.slice(0, hashIdx);
+    const countPart = keysStr.slice(hashIdx + 1).trim();
 
     const count = parseInt(countPart, 10);
     if (isNaN(count)) {
-      throw new Error(`Invalid row count: ${countPart}`);
+      // If it's not a valid number, ignore the hash (treat as part of key)
+      // This handles edge cases where # might appear unquoted but not as separator
+      // though strictly that should be quoted according to spec.
+      // Fallback to normal parsing
+      const keys = splitByDelimiter(keysStr, ',');
+      return { keys, count: null };
     }
 
     const keys = splitByDelimiter(keysPart, ',');

@@ -117,7 +117,40 @@ def test_special_characters():
     decoded = tson.loads(encoded)
 
     assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
     print("[PASS] Special characters")
+
+
+def test_keys_with_special_chars():
+    """Test keys containing special characters."""
+    data = {
+        "with,comma": "value",
+        "with|pipe": "value",
+        "at@sign": "@username",
+        "with space": "value"
+    }
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Keys with special characters")
+
+
+def test_hash_in_key():
+    """Test keys containing hash symbol (edge case for separator)."""
+    data = {
+        "key#1": "value",
+        "normal": "data"
+    }
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Hash in key")
 
 
 def test_numeric_strings():
@@ -258,6 +291,8 @@ def run_all_tests():
         test_mixed_array,
         test_empty_values,
         test_special_characters,
+        test_keys_with_special_chars,
+        test_hash_in_key,
         test_numeric_strings,
         test_nested_arrays,
         test_array_with_nested_objects,

@@ -4,7 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
-[![Tests Passing](https://img.shields.io/badge/tests-13%2F13%20passing-brightgreen.svg)]()
+[![PyPI Downloads](https://img.shields.io/pypi/dm/tson.svg)](https://pypi.org/project/tson/)
+[![Tests Passing](https://img.shields.io/badge/tests-14%2F14%20passing-brightgreen.svg)]()
 
 ## Installation
 
@@ -181,7 +182,7 @@ assert data == decoded  # Special characters preserved
 
 ## Testing
 
-Run the comprehensive test suite (13 tests):
+Run the comprehensive test suite (14 tests):
 
 ```bash
 python tests/test_round\ trip.py
@@ -341,7 +342,7 @@ MIT License - see [../LICENSE](../LICENSE) file for details.
 
 ---
 
-**Version:** 1.0.0
+**Version:** 1.0.1
 **Status:** Production Ready
 **Python:** 3.7+
 **Dependencies:** None

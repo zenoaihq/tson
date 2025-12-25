@@ -4,6 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
 [![npm version](https://img.shields.io/npm/v/@zenoaihq/tson.svg)](https://www.npmjs.com/package/@zenoaihq/tson)
+[![NPM Downloads](https://img.shields.io/npm/dm/@zenoaihq/tson.svg)](https://www.npmjs.com/package/@zenoaihq/tson)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3+-blue.svg)](https://www.typescriptlang.org/)
 
 A compact serialization format designed for efficient data exchange with Large Language Models (LLMs). TSON achieves **25-70% token savings** compared to JSON while maintaining perfect round-trip conversion.
@@ -345,7 +346,7 @@ Run the test suite:
 npm test
 ```
 
-All 13 tests should pass:
+All 14 tests should pass:
 
 ```
 ✓ should handle simple objects
@@ -454,7 +455,7 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 ---
 
 **Package:** `@zenoaihq/tson`
-**Version:** 1.0.0
+**Version:** 1.0.1
 **Status:** Production Ready
 **Node.js:** 16.0.0+
 **TypeScript:** 5.3+

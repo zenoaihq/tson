@@ -94,6 +94,7 @@ describe('TSON Round-Trip Tests', () => {
       quotes: 'She said "hello"',
       newline: 'line1\nline2',
       at_sign: '@username',
+      "at@sign": '@username',
     };
 
     const encoded = dumps(data);
@@ -212,6 +213,20 @@ describe('TSON Round-Trip Tests', () => {
 
     const encoded = dumps(data);
     console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
+
+
+  it('should handle keys containing hash symbol', () => {
+    const data = {
+      "key#1": "value",
+      "normal": "data"
+    };
+
+    const encoded = dumps(data);
+    console.log(`Encoded hash test: ${encoded}`);
     const decoded = loads(encoded);
 
     expect(decoded).toEqual(data);

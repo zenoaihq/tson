@@ -6,6 +6,8 @@ A compact, delimiter-based serialization format designed for efficient data exch
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/tson.svg)](https://pypi.org/project/tson/)
+[![NPM Downloads](https://img.shields.io/npm/dm/@zenoaihq/tson.svg)](https://www.npmjs.com/package/@zenoaihq/tson)
 
 ---
 
@@ -78,11 +80,22 @@ decoded = tson.loads(encoded)  # Perfect round-trip
 **[→ Python Documentation](python/README.md)**
 
 ### JavaScript/TypeScript
-[![Status: Planned](https://img.shields.io/badge/status-planned-orange.svg)]()
+[![Status: Stable](https://img.shields.io/badge/status-stable-green.svg)](javascript/)
+[![npm version](https://img.shields.io/npm/v/@zenoaihq/tson.svg)](https://www.npmjs.com/package/@zenoaihq/tson)
 
-Coming soon! Implementation will follow the same specification.
+```bash
+npm install @zenoaihq/tson
+```
 
-**[→ JavaScript Documentation](javascript/README.md)** _(planned)_
+```typescript
+import { dumps, loads } from '@zenoaihq/tson';
+
+const data = [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }];
+const encoded = dumps(data); // {@id,name#2|1,Alice|2,Bob}
+const decoded = loads(encoded); // Perfect round-trip
+```
+
+**[→ JavaScript Documentation](javascript/README.md)**
 
 ## Repository Structure
 
@@ -101,8 +114,11 @@ tson/
 │   ├── examples/          # Python examples
 │   └── setup.py           # PyPI package setup
 │
-├── javascript/            # JavaScript/TypeScript (future)
-│   └── ...
+├── javascript/        # JavaScript/TypeScript implementation
+│   ├── README.md      # JavaScript-specific docs
+│   ├── src/           # Source code
+│   ├── test/          # Tests (14 tests, all passing)
+│   └── package.json   # NPM package config
 │
 └── benchmarks/            # Cross-language benchmarks (future)
     └── ...
@@ -145,20 +161,27 @@ Correctly distinguishes strings from numbers:
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 
 ### Language-Specific Docs
+### Language-Specific Docs
 - **[Python Documentation](python/README.md)** - Installation, API reference, examples
-- **JavaScript Documentation** _(coming soon)_
+- **[JavaScript Documentation](javascript/README.md)** - Installation, API reference, examples
+
+## Playground
+
+Explore TSON tokenization and verify compatibility with **[interactive playground](https://www.curiouslychase.com/playground/format-tokenization-exploration?mode=preset&size=small-simple&structure=uniform-flat)**. This tool helps visualize token savings and structure across different formats.
+
+![Benchmark Preview](assets/benchmark_preview.png)
 
 ## Comparison with Alternatives
 
 | Format | Universal | Token Savings | LLM Generation | Nested Schema |
 |--------|-----------|---------------|----------------|---------------|
-| JSON | ✅ | 0% | ✅ Easy | ❌ |
+| JSON | ✅ | 0% | ✅ Easy | ✅ **Yes** |
 | CSV | ❌ Tabular only | 60-70% | ✅ Easy | ❌ |
 | **TSON** | ✅ | **30-70%** | ✅ **Delimiter-based** | ✅ **Yes** |
 
 **Key advantages:**
 - ✅ Delimiter-based (more reliable than indentation for LLM generation)
-- ✅ Nested schema notation (unique feature - scales with data size)
+- ✅ Nested schema notation
 - ✅ Universal (handles all JSON types)
 - ✅ Single consistent syntax
 
@@ -194,8 +217,8 @@ Copyright (c) 2025 Zeno AI
 
 ---
 
-**Version:** 1.0.0
-**Status:** Production Ready (Python), Planned (JavaScript)
+**Version:** 1.0.1
+**Status:** Production Ready (Python & JavaScript)
 
 *Built for efficiency. Optimized for LLMs.*
 Developed by Zeno AI (https://zenoai.tech)

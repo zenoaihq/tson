@@ -9,6 +9,7 @@ from .utils import (
     parse_primitive,
     split_by_delimiter,
     build_schema_map,
+    parse_key_schema,
 )
 
 
@@ -160,7 +161,7 @@ def parse_keyed_object(content: str) -> Any:
     schema_map = build_schema_map(keys)
 
     # Get actual field names (without schema notation)
-    field_names = [k.split('(')[0] for k in keys]
+    field_names = [parse_key_schema(k)[0] for k in keys]
 
     # If only one part, it's an error (no values)
     if len(parts) == 1:
@@ -194,19 +195,43 @@ def parse_keys(keys_str: str) -> tuple:
     Returns:
         Tuple of (keys_list, count or None)
     """
-    # Check for row count marker
-    if '#' in keys_str:
-        parts = keys_str.rsplit('#', 1)  # Split from right in case # in key name
-        keys_part = parts[0]
-        count_part = parts[1].strip()
+    # Check for row count marker, respecting quotes
+    hash_idx = -1
+    in_quotes = False
+    
+    # Scan backwards to find the last # that is NOT inside quotes
+    for i in range(len(keys_str) - 1, -1, -1):
+        char = keys_str[i]
+        
+        if char == '"':
+            # Check for escaped quote (count preceding backslashes)
+            backslash_count = 0
+            for j in range(i - 1, -1, -1):
+                if keys_str[j] == '\\':
+                    backslash_count += 1
+                else:
+                    break
+            
+            # If even number of backslashes, it's a real quote
+            if backslash_count % 2 == 0:
+                in_quotes = not in_quotes
+        
+        if char == '#' and not in_quotes:
+            hash_idx = i
+            break
+
+    if hash_idx != -1:
+        keys_part = keys_str[:hash_idx]
+        count_part = keys_str[hash_idx + 1:].strip()
 
         try:
             count = int(count_part)
+            keys = split_by_delimiter(keys_part, ',')
+            return (keys, count)
         except ValueError:
-            raise ValueError(f"Invalid row count: {count_part}")
-
-        keys = split_by_delimiter(keys_part, ',')
-        return (keys, count)
+            # If it's not a valid number, ignore the hash (treat as part of key)
+            keys = split_by_delimiter(keys_str, ',')
+            return (keys, None)
     else:
         keys = split_by_delimiter(keys_str, ',')
         return (keys, None)
@@ -325,7 +350,7 @@ def parse_schematized_value(value_str: str, schema: List[str]) -> Dict:
     nested_schema_map = build_schema_map(schema)
 
     # Get field names (without schema notation)
-    field_names = [k.split('(')[0] for k in schema]
+    field_names = [parse_key_schema(k)[0] for k in schema]
 
     # Build object
     obj = {}

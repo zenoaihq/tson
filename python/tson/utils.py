@@ -322,11 +322,18 @@ def parse_key_schema(key_string: str) -> tuple:
 
     # Check if key has nested schema
     if '(' not in key_string:
+        # Unquote the key name if it's quoted
+        if key_string.startswith('"') and key_string.endswith('"'):
+            return (unescape_string(key_string[1:-1]), None)
         return (key_string, None)
 
     # Find the opening parenthesis
     paren_idx = key_string.index('(')
     key_name = key_string[:paren_idx].strip()
+
+    # Unquote the key name if it's quoted
+    if key_name.startswith('"') and key_name.endswith('"'):
+        key_name = unescape_string(key_name[1:-1])
 
     # Extract schema (everything between outermost parentheses)
     # Need to handle nested parentheses
