@@ -13,7 +13,7 @@ import tson
 
 def test_simple_object():
     """Test simple object serialization."""
-    data = {"name": "Alice", "age": 30, "active": True}
+    data = {"name": "Alice(asd)", "age": 30, "active": True}
 
     encoded = tson.dumps(data)
     print(f"Encoded: {encoded}")
@@ -277,6 +277,70 @@ def test_numeric_types():
     print("[PASS] Numeric types")
 
 
+def test_backslash_in_values():
+    """Test strings containing backslashes (escape sequence handling)."""
+    data = {
+        "path": "C:\\Users\\file",
+        "escaped_n": "literal\\ntext",
+        "double_backslash": "a\\\\b",
+    }
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Backslash in values")
+
+
+def test_parentheses_in_keys():
+    """Test keys containing parentheses (edge case for schema notation)."""
+    data = {
+        "func()": "value",
+        "name(test)": "another",
+        "(leading": "val1",
+        "trailing)": "val2",
+    }
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Parentheses in keys")
+
+
+def test_double_quotes_in_values():
+    """Test strings containing double quotes."""
+    data = {
+        "quote": 'He said "hello"',
+        "mixed": 'Text with "quotes" and more',
+        "only_quote": '"',
+    }
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Double quotes in values")
+
+
+def test_nested_schema_special_char_keys():
+    """Test nested objects with special characters in their keys."""
+    data = [
+        {"id": 1, "info": {"key,comma": "Alice", "key|pipe": "value1"}},
+        {"id": 2, "info": {"key,comma": "Bob", "key|pipe": "value2"}},
+    ]
+
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    print("[PASS] Nested schema with special char keys")
+
+
 def run_all_tests():
     """Run all round-trip tests."""
     print("\n" + "=" * 70)
@@ -299,6 +363,10 @@ def run_all_tests():
         test_complex_structure,
         test_boolean_values,
         test_numeric_types,
+        test_backslash_in_values,
+        test_parentheses_in_keys,
+        test_double_quotes_in_values,
+        test_nested_schema_special_char_keys,
     ]
 
     failed = []

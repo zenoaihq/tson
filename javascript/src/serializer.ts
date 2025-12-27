@@ -162,7 +162,14 @@ export function serializeTabular(arr: TSONObject[]): string {
     // Add nested schema notation if applicable
     if (key in nestedSchemas) {
       const schemaKeys = nestedSchemas[key]!;
-      const schemaStr = schemaKeys.join(',');
+      // Quote schema keys that need quoting (contain special chars)
+      const formattedSchemaKeys = schemaKeys.map(sk => {
+        if (needsQuoting(sk)) {
+          return `"${escapeString(sk)}"`;
+        }
+        return sk;
+      });
+      const schemaStr = formattedSchemaKeys.join(',');
       keyStr = `${keyStr}(@${schemaStr})`;
     }
 

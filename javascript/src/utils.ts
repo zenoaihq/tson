@@ -9,7 +9,7 @@ import type { TSONValue, TSONObject, SchemaMap, KeySchema, ParsedKeys } from './
 /**
  * Special characters that require string quoting
  */
-export const SPECIAL_CHARS = new Set([',', '|', '@', '#', '{', '}', '[', ']', '\n', '\r', '\t', ' ']);
+export const SPECIAL_CHARS = new Set([',', '|', '@', '#', '{', '}', '[', ']', '\n', '\r', '\t', ' ', '"', '(', ')']);
 
 /**
  * Determine if a string value needs to be quoted in TSON format.
@@ -86,15 +86,40 @@ export function escapeString(value: string): string {
  * Unescape a quoted string back to its original form.
  *
  * Reverses the escaping done by escapeString().
+ * Must process character by character to handle sequences like \\n correctly.
  */
 export function unescapeString(value: string): string {
-  // Order matters: process in reverse order of escaping
-  return value
-    .replace(/\\t/g, '\t')
-    .replace(/\\r/g, '\r')
-    .replace(/\\n/g, '\n')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
+  const result: string[] = [];
+  let i = 0;
+  while (i < value.length) {
+    if (value[i] === '\\' && i + 1 < value.length) {
+      const nextChar = value[i + 1];
+      if (nextChar === '\\') {
+        result.push('\\');
+        i += 2;
+      } else if (nextChar === '"') {
+        result.push('"');
+        i += 2;
+      } else if (nextChar === 'n') {
+        result.push('\n');
+        i += 2;
+      } else if (nextChar === 'r') {
+        result.push('\r');
+        i += 2;
+      } else if (nextChar === 't') {
+        result.push('\t');
+        i += 2;
+      } else {
+        // Unknown escape, keep as-is
+        result.push(value[i]);
+        i += 1;
+      }
+    } else {
+      result.push(value[i]);
+      i += 1;
+    }
+  }
+  return result.join('');
 }
 
 /**
@@ -305,12 +330,14 @@ export function splitByDelimiter(text: string, delimiter: string): string[] {
 export function parseKeySchema(keyString: string): KeySchema {
   const trimmed = keyString.trim();
 
-  // Check if key has nested schema
+  // If the entire key is quoted, it's a simple key (any parens inside are literal)
+  // Must check this BEFORE looking for '(' to handle keys like "company("
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return { keyName: unescapeString(trimmed.slice(1, -1)), schema: null };
+  }
+
+  // Check if key has nested schema (only for unquoted keys)
   if (!trimmed.includes('(')) {
-    // Unquote the key name if it's quoted
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-      return { keyName: unescapeString(trimmed.slice(1, -1)), schema: null };
-    }
     return { keyName: trimmed, schema: null };
   }
 

@@ -231,4 +231,75 @@ describe('TSON Round-Trip Tests', () => {
 
     expect(decoded).toEqual(data);
   });
+
+  it('should handle backslash in values', () => {
+    const data = {
+      path: 'C:\\Users\\file',
+      escaped_n: 'literal\\ntext',
+      double_backslash: 'a\\\\b',
+    };
+
+    const encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
+
+  it('should handle parentheses in keys', () => {
+    const data = {
+      'func()': 'value',
+      'name(test)': 'another',
+      '(leading': 'val1',
+      'trailing)': 'val2',
+    };
+
+    const encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
+
+  it('should handle double quotes in values', () => {
+    const data = {
+      quote: 'He said "hello"',
+      mixed: 'Text with "quotes" and more',
+      only_quote: '"',
+    };
+
+    const encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
+
+  it('should handle nested schema with special char keys', () => {
+    const data = [
+      { id: 1, info: { 'key,comma': 'Alice', 'key|pipe': 'value1' } },
+      { id: 2, info: { 'key,comma': 'Bob', 'key|pipe': 'value2' } },
+    ];
+
+    const encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
+
+  it('should handle keys with special characters', () => {
+    const data = {
+      'with,comma': 'value',
+      'with|pipe': 'value',
+      'at@sign': '@username',
+      'with space': 'value',
+    };
+
+    const encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    const decoded = loads(encoded);
+
+    expect(decoded).toEqual(data);
+  });
 });

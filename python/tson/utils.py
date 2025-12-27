@@ -8,7 +8,7 @@ from typing import Any, List, Dict, Optional
 
 
 # Special characters that require string quoting
-SPECIAL_CHARS = {',', '|', '@', '#', '{', '}', '[', ']', '\n', '\r', '\t', ' '}
+SPECIAL_CHARS = {',', '|', '@', '#', '{', '}', '[', ']', '\n', '\r', '\t', ' ',"\"", "(", ")"}
 
 
 def needs_quoting(value: str) -> bool:
@@ -110,13 +110,36 @@ def unescape_string(value: str) -> str:
     Returns:
         Unescaped string
     """
-    # Order matters: process in reverse order of escaping
-    value = value.replace('\\t', '\t')
-    value = value.replace('\\r', '\r')
-    value = value.replace('\\n', '\n')
-    value = value.replace('\\"', '"')
-    value = value.replace('\\\\', '\\')
-    return value
+    # Must process character by character to handle escape sequences correctly
+    # Simple replace() can corrupt sequences like \\n (literal backslash + n)
+    result = []
+    i = 0
+    while i < len(value):
+        if value[i] == '\\' and i + 1 < len(value):
+            next_char = value[i + 1]
+            if next_char == '\\':
+                result.append('\\')
+                i += 2
+            elif next_char == '"':
+                result.append('"')
+                i += 2
+            elif next_char == 'n':
+                result.append('\n')
+                i += 2
+            elif next_char == 'r':
+                result.append('\r')
+                i += 2
+            elif next_char == 't':
+                result.append('\t')
+                i += 2
+            else:
+                # Unknown escape, keep as-is
+                result.append(value[i])
+                i += 1
+        else:
+            result.append(value[i])
+            i += 1
+    return ''.join(result)
 
 
 def format_primitive(value: Any) -> str:
@@ -320,11 +343,13 @@ def parse_key_schema(key_string: str) -> tuple:
     """
     key_string = key_string.strip()
 
-    # Check if key has nested schema
+    # If the entire key is quoted, it's a simple key (any parens inside are literal)
+    # Must check this BEFORE looking for '(' to handle keys like "company("
+    if key_string.startswith('"') and key_string.endswith('"'):
+        return (unescape_string(key_string[1:-1]), None)
+
+    # Check if key has nested schema (only for unquoted keys)
     if '(' not in key_string:
-        # Unquote the key name if it's quoted
-        if key_string.startswith('"') and key_string.endswith('"'):
-            return (unescape_string(key_string[1:-1]), None)
         return (key_string, None)
 
     # Find the opening parenthesis

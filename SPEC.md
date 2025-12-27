@@ -1,4 +1,4 @@
-# TSON Specification v1.0
+# TSON Specification v1.1
 
 **Token-efficient Structured Object Notation**
 
@@ -10,7 +10,9 @@ A compact, delimiter-based serialization format designed for efficient data exch
 2. **Single Syntax** - One consistent format for all JSON types
 3. **Delimiter-Based** - Explicit separators, not whitespace-dependent
 4. **LLM-Friendly** - Clear structure that models can parse and generate
-5. **Universal** - Complete JSON compatibility
+5. **Universal** - Complete JSON compatibility with lossless round-trips
+
+---
 
 ## Core Data Types
 
@@ -20,16 +22,18 @@ TSON supports all JSON data types:
 |------|---------|-------|
 | Object | `{@name,age\|Alice,30}` | Key-value pairs |
 | Array | `[1,2,3]` | Ordered values |
-| String | `Alice` or `"Hello, World"` | Quoted if needed |
+| String | `Alice` or `"Hello, World"` | Quoted if contains special chars |
 | Number | `42`, `3.14`, `-17` | Integer or float |
 | Boolean | `true`, `false` | Lowercase |
 | Null | `null` | Represents no value |
+
+---
 
 ## Syntax Rules
 
 ### 1. Objects
 
-**Simple Object:**
+**Format:**
 ```
 {@key1,key2,key3|value1,value2,value3}
 ```
@@ -59,7 +63,7 @@ Equivalent JSON:
 
 ### 2. Arrays
 
-**Simple Array:**
+**Format:**
 ```
 [value1,value2,value3]
 ```
@@ -81,16 +85,18 @@ Equivalent JSON:
 
 ### 3. Array of Objects (Tabular Format)
 
+This is the **key optimization** - keys are declared once instead of repeated.
+
 **Format:**
 ```
-{@key1,key2#N|value1,value2|value1,value2}
+{@key1,key2#N|value1,value2|value1,value2|...}
 ```
 
 **Components:**
 - `@key1,key2` - Schema (keys declared once)
-- `#N` - Optional row count
+- `#N` - Row count (optional but recommended)
 - `|` - Row separator
-- Each row: comma-separated values matching the schema
+- Each row: comma-separated values matching schema order
 
 **Example:**
 ```
@@ -106,11 +112,9 @@ Equivalent JSON:
 ]
 ```
 
-**Key Benefit:** Keys written once instead of repeated per object.
-
 ### 4. Nested Schema Notation
 
-For objects containing nested objects with uniform structure:
+For arrays of objects containing nested objects with uniform structure:
 
 **Format:**
 ```
@@ -131,13 +135,133 @@ Equivalent JSON:
 ```
 
 **How It Works:**
-1. `address(@city,zip)` declares that the `address` field contains objects with `city` and `zip` keys
-2. In row data: `{NYC,"10001"}` is interpreted as an object using that schema
-3. No need to repeat `@city,zip` for each row
+1. `address(@city,zip)` declares that `address` contains objects with `city` and `zip` keys
+2. In row data: `{NYC,"10001"}` is interpreted using that schema
+3. No need to repeat key declarations for each row
 
-**Token Savings:** Scales with number of rows - more rows = greater savings
+**Nested Schema Keys with Special Characters:**
+```
+{@id,info(@"key,comma","key|pipe")#2|1,{Alice,value1}|2,{Bob,value2}}
+```
 
-### 5. Nested Structures
+Keys within nested schemas that contain special characters must be quoted.
+
+---
+
+## Delimiters
+
+| Character | Purpose | Must Quote If In Value |
+|-----------|---------|-----------------------|
+| `{` | Start object | Yes |
+| `}` | End object | Yes |
+| `[` | Start array | Yes |
+| `]` | End array | Yes |
+| `@` | Object marker | Yes |
+| `,` | Value separator | Yes |
+| `|` | Row separator | Yes |
+| `#` | Count marker | Yes |
+| `"` | String quote | Yes (use `\"`) |
+| `(` | Schema notation | Yes |
+| `)` | Schema notation | Yes |
+
+---
+
+## String Handling
+
+### When to Quote Strings
+
+Strings **must be quoted** when they:
+
+1. **Are empty** - `""`
+2. **Contain delimiters** - `,` `|` `@` `#` `{` `}` `[` `]` `(` `)`
+3. **Contain double quotes** - Escape as `\"`
+4. **Contain whitespace** - Spaces, tabs, newlines
+5. **Look like numbers** - `"10001"` to preserve as string
+6. **Look like reserved words** - `"true"` `"false"` `"null"` as strings
+
+### Unquoted Strings (Safe Characters)
+
+These characters are safe without quotes: `a-z A-Z 0-9 _ - . / : + =`
+
+**Examples:**
+```
+Alice
+hello_world
+2025-01-27
+user@example.com    // @ is special but common in emails - MUST quote
+```
+
+Wait - `@` requires quoting! Correct example:
+```
+Alice              // OK - no special chars
+hello_world        // OK
+2025-01-27         // OK
+"user@example.com" // Must quote - contains @
+```
+
+### String Escaping
+
+Inside quoted strings, use JSON-style escape sequences:
+
+| Escape | Meaning |
+|--------|---------|
+| `\"` | Double quote |
+| `\\` | Backslash |
+| `\n` | Newline |
+| `\r` | Carriage return |
+| `\t` | Tab |
+
+**Examples:**
+```
+"She said \"hello\""      // Contains quotes
+"Line 1\nLine 2"          // Contains newline
+"C:\\Users\\file"         // Windows path with backslashes
+"literal\\ntext"          // Literal backslash + n (not newline)
+```
+
+### Type Preservation
+
+**Numeric Strings vs Numbers:**
+```
+{@zip_string,zip_number|"10001",10001}
+```
+- `"10001"` - String (quoted)
+- `10001` - Number (unquoted)
+
+**Empty Values:**
+```
+{@str,arr,obj|"",[],{@}}
+```
+- `""` - Empty string
+- `[]` - Empty array
+- `{@}` - Empty object
+
+---
+
+## Keys with Special Characters
+
+Keys follow the same quoting rules as values:
+
+**Simple keys (unquoted):**
+```
+{@name,age,active|...}
+```
+
+**Keys with special characters (quoted):**
+```
+{@"with,comma","with|pipe","at@sign","with space"|value,value,value,value}
+```
+
+**Keys with parentheses:**
+```
+{@"func()","name(test)"|value,another}
+```
+
+Note: A key like `address(@city,zip)` is **nested schema notation**, not a key with parentheses. To have a key literally named `address()`, quote it: `"address()"`.
+
+---
+
+## Nested Structures
 
 **Objects can nest:**
 ```
@@ -154,101 +278,11 @@ Equivalent JSON:
 {@name,tags,meta|Alice,[python,go],{@created|2025-01-27}}
 ```
 
-## Delimiters
-
-| Character | Purpose | Context |
-|-----------|---------|---------|
-| `{` | Start object | All objects |
-| `}` | End object | All objects |
-| `[` | Start array | All arrays |
-| `]` | End array | All arrays |
-| `@` | Object marker | Indicates keys follow |
-| `,` | Separator | Keys, values, array elements |
-| `|` | Row separator | Between key list and values, between rows |
-| `#` | Count marker | Optional row count |
-
-## Value Representation
-
-### Primitives
-
-**Numbers:**
-- Integers: `42`, `-17`, `0`
-- Floats: `3.14`, `-2.5`, `0.001`
-- Scientific: `2.5e10`, `1.23e-5`
-
-**Booleans:**
-- `true`
-- `false`
-
-**Null:**
-- `null`
-
-### Strings
-
-**Unquoted** (when safe):
-```
-Alice
-hello_world
-data-2025
-```
-
-Allowed characters: `a-z A-Z 0-9 _ -`
-
-**Quoted** (when necessary):
-```
-"Hello, World"
-"user@example.com"
-"10001"
-```
-
-Quote when string contains:
-- Delimiters: `,` `|` `@` `#` `{` `}` `[` `]`
-- Whitespace or newlines
-- Looks like a number (to preserve as string)
-- Special characters
-
-### String Escaping
-
-Inside quoted strings, use standard JSON escapes:
-
-| Escape | Meaning |
-|--------|---------|
-| `\"` | Double quote |
-| `\\` | Backslash |
-| `\n` | Newline |
-| `\t` | Tab |
-| `\r` | Carriage return |
-
-**Example:**
-```
-"She said \"hello\""
-"Line 1\nLine 2"
-```
-
-## Type Preservation
-
-**Numeric Strings:**
-
-To distinguish string `"123"` from number `123`:
-
-```
-{@zip,count|"10001",10001}
-```
-- `"10001"` - String (quoted because looks like number)
-- `10001` - Number (unquoted)
-
-**Empty Values:**
-
-```
-{@str,arr,obj|"",[],{@}}
-```
-- `""` - Empty string
-- `[]` - Empty array
-- `{@}` - Empty object
+---
 
 ## Whitespace
 
-**Whitespace is optional** for compactness but can be added for readability:
+Whitespace is **optional** but can improve readability:
 
 **Compact:**
 ```
@@ -260,9 +294,7 @@ To distinguish string `"123"` from number `123`:
 {@id,name#2 | 1,Alice | 2,Bob}
 ```
 
-Both are equivalent. Parsers ignore whitespace around delimiters.
-
-**Newlines:** Can be used between rows for readability:
+**Multi-line:**
 ```
 {@id,name#3|
 1,Alice|
@@ -270,21 +302,9 @@ Both are equivalent. Parsers ignore whitespace around delimiters.
 3,Carol}
 ```
 
-## Grammar (Informal)
+Parsers should trim whitespace around delimiters.
 
-```
-value      := object | array | primitive
-object     := "{@" keys "|" values "}" | "{@}"
-array      := "[" values "]" | "[]"
-keys       := key ("," key)* ("#" count)?
-key        := identifier | identifier "(" keys ")"
-values     := value ("," value)* ("|" value ("," value)*)*
-primitive  := string | number | boolean | null
-string     := unquoted | '"' escaped '"'
-number     := integer | float
-boolean    := "true" | "false"
-null       := "null"
-```
+---
 
 ## Examples
 
@@ -294,25 +314,13 @@ TSON: {@name,age|Alice,30}
 JSON: {"name": "Alice", "age": 30}
 ```
 
-### Example 2: Simple Array
-```
-TSON: [1,2,3]
-JSON: [1, 2, 3]
-```
-
-### Example 3: Nested Object
-```
-TSON: {@user|{@profile|{@name|Alice}}}
-JSON: {"user": {"profile": {"name": "Alice"}}}
-```
-
-### Example 4: Array of Objects
+### Example 2: Array of Objects
 ```
 TSON: {@id,name#2|1,Alice|2,Bob}
 JSON: [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
 ```
 
-### Example 5: Nested Schema
+### Example 3: Nested Schema
 ```
 TSON: {@id,address(@city,zip)#2|1,{NYC,"10001"}|2,{LA,"90001"}}
 JSON: [
@@ -321,15 +329,30 @@ JSON: [
 ]
 ```
 
-### Example 6: Mixed Types
+### Example 4: Special Characters in Values
 ```
-TSON: {@name,tags,count|Alice,[python,go],5}
-JSON: {"name": "Alice", "tags": ["python", "go"], "count": 5}
+TSON: {@path,quote,comma|"C:\\Users\\file","He said \"hello\"","a,b,c"}
+JSON: {"path": "C:\\Users\\file", "quote": "He said \"hello\"", "comma": "a,b,c"}
+```
+
+### Example 5: Special Characters in Keys
+```
+TSON: {@"key,comma","key|pipe"|value1,value2}
+JSON: {"key,comma": "value1", "key|pipe": "value2"}
+```
+
+### Example 6: Nested Schema with Special Char Keys
+```
+TSON: {@id,info(@"key,comma","key|pipe")#2|1,{Alice,val1}|2,{Bob,val2}}
+JSON: [
+  {"id": 1, "info": {"key,comma": "Alice", "key|pipe": "val1"}},
+  {"id": 2, "info": {"key,comma": "Bob", "key|pipe": "val2"}}
+]
 ```
 
 ### Example 7: Complex Real-World
 ```
-TSON: {@company,employees(@id,name,skills)#2|Acme,{1,Alice,[Python,Go]}|{2,Bob,[Java]}}
+TSON: {@company,employees|Acme,{@id,name,skills#2|1,Alice,[Python,Go]|2,Bob,[Java]}}
 JSON: {
   "company": "Acme",
   "employees": [
@@ -339,83 +362,76 @@ JSON: {
 }
 ```
 
-## Design Decisions
+---
 
-### Why `@` for objects?
+## Grammar (Informal BNF)
 
-- Clear visual marker that keys follow
-- Distinguishes objects from arrays at a glance
-- Single character = minimal overhead
-
-### Why `|` for row separator?
-
-- Visually distinct from `,` (value separator)
-- Common in data formats (CSV variants)
-- Single character = compact
-
-### Why nested schema notation?
-
-- Massive token savings for repeated structures
-- Scales: 100 rows with nested objects = ~40% token reduction
-- Schema declared upfront helps LLMs understand structure
-
-### Why curly braces for both single objects and arrays of objects?
-
-- `{@key|value}` - Single object
-- `{@key#N|val|val}` - Array of objects (presence of `#N` or multiple `|` indicates array)
-- Consistent: `@` always means "keys follow"
-
-## Limitations
-
-1. **No Comments** - TSON is a data format, not a configuration language
-2. **No References** - Cannot represent circular structures or shared references
-3. **Tree Structure Only** - Like JSON, TSON represents trees, not graphs
-4. **Schema Depth** - Nested schemas recommended for 1-2 levels (deeper nesting becomes complex)
-
-## Extensions (Future)
-
-Potential additions for v2.0+:
-
-- Extended types: `NaN`, `Infinity`, `-Infinity`
-- Datetime notation: `@date(2025-01-27)`
-- Binary data: `@binary(base64...)`
-- Comments: `// comment`
-- Schema references: `@schema(user)` to reuse schemas
-- Value references: Deduplication for repeated values
-
-## Compatibility
-
-### Converting from JSON
-
-All JSON can be converted to TSON losslessly:
-1. Objects → `{@key1,key2|val1,val2}`
-2. Arrays → `[val1,val2]`
-3. Array of uniform objects → `{@key#N|...}` (tabular optimization)
-4. Primitives → Same representation
-
-### Converting to JSON
-
-All TSON can be converted to JSON losslessly:
-1. Parse TSON structure
-2. Reconstruct JSON tree
-3. Apply schemas to nested objects
-4. Output standard JSON
-
-## Formal Specification Status
-
-This specification defines TSON v1.0. Future versions may add features but will maintain backward compatibility with v1.0 syntax for core types.
-
-## References
-
-- JSON Specification: RFC 8259
-- Design inspiration: TOON, MessagePack, CSV
-
-## License
-
-This specification is released under MIT License.
+```
+document   := value
+value      := object | array | primitive
+object     := "{@" keys "|" values "}" | "{@}"
+array      := "[" values "]" | "[]"
+keys       := key ("," key)* ("#" count)?
+key        := identifier | quoted_string | identifier "(@" schema_keys ")"
+schema_keys := key ("," key)*
+values     := value ("," value)* ("|" value ("," value)*)*
+primitive  := string | number | boolean | null
+string     := unquoted_string | '"' escaped_chars '"'
+number     := integer | float
+boolean    := "true" | "false"
+null       := "null"
+count      := digit+
+```
 
 ---
 
-**Version:** 1.0
-**Date:** 2025-01-27
+## Implementation Notes
+
+### Parsing Keys
+1. If a key starts and ends with `"`, treat it as a quoted key (unescape contents)
+2. If a key contains `(@`, parse as nested schema notation
+3. Otherwise, treat as plain key name
+
+### Detecting Tabular Format
+An object is tabular (array of objects) if:
+- Row count `#N` is present, OR
+- Multiple `|` separators exist after the keys
+
+### Escape Sequence Processing
+When unescaping strings, process character-by-character to correctly handle:
+- `\\n` = literal backslash + 'n'
+- `\n` = newline character
+
+---
+
+## Limitations
+
+1. **No Comments** - TSON is a data format, not configuration
+2. **No Circular References** - Tree structures only
+3. **Schema Depth** - Nested schemas recommended for 1-2 levels
+4. **No Special Numbers** - `NaN`, `Infinity` not supported (v1.x)
+
+---
+
+## Compatibility
+
+### JSON → TSON
+All JSON converts losslessly:
+- Objects → `{@key1,key2|val1,val2}`
+- Arrays of uniform objects → `{@key#N|...}` (tabular)
+- Other arrays → `[val1,val2]`
+- Primitives → Same representation (quote if needed)
+
+### TSON → JSON
+All TSON converts losslessly:
+- Parse structure
+- Apply schemas to nested objects
+- Output standard JSON
+
+---
+
+**Version:** 1.1
+**Date:** 2025-12-27
 **Status:** Stable
+
+*Built for efficiency. Optimized for LLMs.*

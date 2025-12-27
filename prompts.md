@@ -1,377 +1,334 @@
-# TSON Format Prompts
+# TSON Prompt Templates
 
 Prompts for teaching LLMs about TSON and converting between TSON ↔ JSON.
 
 ---
 
-## System Prompt: TSON Format Explanation
+## System Prompt (Full Version)
 
-**Use this as your system prompt when working with TSON:**
-
-```
-You are working with TSON (Token-efficient Structured Object Notation), a compact alternative to JSON.
-
-TSON Syntax:
-• Objects: {@key1,key2|value1,value2}
-• Arrays: [value1,value2,value3]
-• Tabular (array of objects): {@key1,key2#N|val1,val2|val1,val2}
-• Nested schema: {@field,nested(@subkey1,subkey2)|value,{subval1,subval2}}
-
-Delimiters:
-• @ = object marker
-• , = field/value separator
-• | = row separator
-• # = row count
-
-Primitives:
-• Strings: Alice or "quoted string"
-• Numbers: 42, 3.14
-• Booleans: true, false
-• Null: null
-
-Examples:
-
-1. Simple object:
-   JSON: {"name": "Alice", "age": 30}
-   TSON: {@name,age|Alice,30}
-
-2. Array:
-   JSON: [1, 2, 3]
-   TSON: [1,2,3]
-
-3. Array of objects (tabular):
-   JSON: [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
-   TSON: {@id,name#2|1,Alice|2,Bob}
-
-4. Nested objects with schema:
-   JSON: [{"id": 1, "address": {"city": "NYC", "zip": "10001"}}, {"id": 2, "address": {"city": "LA", "zip": "90001"}}]
-   TSON: {@id,address(@city,zip)#2|1,{NYC,"10001"}|2,{LA,"90001"}}
-
-Key Rules:
-• Keys are written ONCE in header, then only values in rows
-• Use | to separate rows, , to separate values
-• Include #N to specify row count
-• Quote strings only if they contain special characters: , | @ # { } [ ]
-• Nested objects with repeated structure use (@key1,key2) notation
-```
-
----
-
-## Prompt 1: Convert TSON to JSON
-
-**User prompt template:**
+Use this as your system prompt when working with TSON:
 
 ```
-Convert this TSON data to JSON format:
+You work with TSON (Token-efficient Structured Object Notation), a compact alternative to JSON.
 
-TSON:
-{@id,name,email#3|1,Alice,alice@example.com|2,Bob,bob@example.com|3,Carol,carol@example.com}
+## TSON Syntax
 
-Return as valid JSON.
-```
+Objects:
+  {@key1,key2|value1,value2}
 
-**Expected output:**
-```json
-[
-  {"id": 1, "name": "Alice", "email": "alice@example.com"},
-  {"id": 2, "name": "Bob", "email": "bob@example.com"},
-  {"id": 3, "name": "Carol", "email": "carol@example.com"}
-]
+Arrays:
+  [value1,value2,value3]
+
+Tabular (array of objects):
+  {@key1,key2#N|val1,val2|val1,val2}
+  Keys declared once, # followed by row count
+
+Nested schema:
+  {@id,address(@city,zip)#2|1,{NYC,"10001"}|2,{LA,"90001"}}
+  Nested object structure declared in header
+
+## Delimiters
+
+@ = object marker (keys follow)
+, = field/value separator  
+| = row separator
+# = row count marker
+{ } = object boundaries
+[ ] = array boundaries
+( ) = nested schema notation
+
+## Quoting Rules
+
+Quote strings when they contain: , | @ # { } [ ] ( ) " or whitespace
+Quote numeric strings to preserve as string: "10001"
+Escape quotes inside strings: "She said \"hello\""
+Escape backslashes: "C:\\Users\\file"
+
+## Examples
+
+Simple object:
+  JSON: {"name": "Alice", "age": 30}
+  TSON: {@name,age|Alice,30}
+
+Array of objects:
+  JSON: [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+  TSON: {@id,name#2|1,Alice|2,Bob}
+
+Nested objects:
+  JSON: [{"id": 1, "addr": {"city": "NYC"}}, {"id": 2, "addr": {"city": "LA"}}]
+  TSON: {@id,addr(@city)#2|1,{NYC}|2,{LA}}
+
+Special chars in keys:
+  JSON: {"key,comma": "value"}
+  TSON: {@"key,comma"|value}
+
+Escape sequences:
+  JSON: {"path": "C:\\Users", "quote": "He said \"hi\""}
+  TSON: {@path,quote|"C:\\Users","He said \"hi\""}
 ```
 
 ---
 
-## Prompt 2: Convert JSON to TSON
+## System Prompt (Minimal Version)
 
-**User prompt template:**
-
-```
-Convert this JSON data to TSON format:
-
-JSON:
-[
-  {"id": 1, "name": "Alice", "email": "alice@example.com"},
-  {"id": 2, "name": "Bob", "email": "bob@example.com"},
-  {"id": 3, "name": "Carol", "email": "carol@example.com"}
-]
-
-Return as TSON.
-```
-
-**Expected output:**
-```
-{@id,name,email#3|1,Alice,alice@example.com|2,Bob,bob@example.com|3,Carol,carol@example.com}
-```
-
----
-
-## Prompt 3: TSON with Task (Parsing Input)
-
-**User prompt template:**
-
-```
-The following data is in TSON format. Parse it and answer the question.
-
-TSON Data:
-{@id,name,department,salary#5|1,Alice,Engineering,120000|2,Bob,Sales,95000|3,Carol,Engineering,115000|4,Dave,Marketing,85000|5,Eve,Engineering,125000}
-
-Question: What is the average salary for Engineering department employees?
-```
-
-**Expected output:**
-```
-The Engineering department has 3 employees:
-- Alice: $120,000
-- Carol: $115,000
-- Eve: $125,000
-
-Average salary: $120,000
-```
-
----
-
-## Prompt 4: Generate TSON Output
-
-**User prompt template:**
-
-```
-Generate sample employee data with the following fields: id, name, department, hire_date.
-
-Create 5 employees.
-
-Return in TSON format.
-```
-
-**Expected output:**
-```
-{@id,name,department,hire_date#5|1,Alice,Engineering,2023-01-15|2,Bob,Sales,2023-02-20|3,Carol,Marketing,2023-03-10|4,Dave,Engineering,2023-04-05|5,Eve,Design,2023-05-12}
-```
-
----
-
-## Prompt 5: Complex Nested TSON
-
-**User prompt template:**
-
-```
-Convert this JSON with nested objects to TSON:
-
-JSON:
-[
-  {
-    "id": 1,
-    "name": "Alice",
-    "contact": {
-      "email": "alice@example.com",
-      "phone": "555-0101"
-    }
-  },
-  {
-    "id": 2,
-    "name": "Bob",
-    "contact": {
-      "email": "bob@example.com",
-      "phone": "555-0102"
-    }
-  }
-]
-
-Use nested schema notation for the contact field.
-```
-
-**Expected output:**
-```
-{@id,name,contact(@email,phone)#2|1,Alice,{alice@example.com,555-0101}|2,Bob,{bob@example.com,555-0102}}
-```
-
----
-
-## Prompt 6: TSON to JSON with Validation
-
-**User prompt template:**
-
-```
-Convert this TSON to JSON and validate the structure:
-
-TSON:
-{@user_id,username,is_active,last_login#3|101,alice,true,2025-01-27|102,bob,false,2025-01-20|103,carol,true,2025-01-26}
-
-Requirements:
-1. Convert to valid JSON
-2. Ensure all data types are correct (numbers, booleans, strings)
-3. Format the JSON with proper indentation
-```
-
-**Expected output:**
-```json
-[
-  {
-    "user_id": 101,
-    "username": "alice",
-    "is_active": true,
-    "last_login": "2025-01-27"
-  },
-  {
-    "user_id": 102,
-    "username": "bob",
-    "is_active": false,
-    "last_login": "2025-01-20"
-  },
-  {
-    "user_id": 103,
-    "username": "carol",
-    "is_active": true,
-    "last_login": "2025-01-26"
-  }
-]
-```
-
----
-
-## Prompt 7: Bidirectional Conversion Test
-
-**User prompt template:**
-
-```
-Test your understanding of TSON:
-
-1. Convert this JSON to TSON:
-{"product": "Widget", "price": 29.99, "in_stock": true}
-
-2. Then convert this TSON to JSON:
-{@order_id,product,quantity#2|1001,Widget,5|1002,Gadget,3}
-
-Show both conversions.
-```
-
-**Expected output:**
-```
-1. JSON to TSON:
-{@product,price,in_stock|Widget,29.99,true}
-
-2. TSON to JSON:
-[
-  {"order_id": 1001, "product": "Widget", "quantity": 5},
-  {"order_id": 1002, "product": "Gadget", "quantity": 3}
-]
-```
-
----
-
-## Prompt 8: Working with TSON in Function Calls
-
-**System prompt + function definition:**
-
-```
-You have access to a function that accepts data in TSON format for efficiency.
-
-Function:
-analyze_sales_data(data: string in TSON format) -> analysis results
-
-The data parameter should be in TSON tabular format.
-
-Example usage:
-analyze_sales_data("{@date,region,sales#3|2025-01-01,North,5000|2025-01-02,South,6000|2025-01-03,East,5500}")
-```
-
-**User prompt:**
-```
-I have sales data for 5 days:
-- 2025-01-01, North region, $5,000
-- 2025-01-02, South region, $6,000
-- 2025-01-03, East region, $5,500
-- 2025-01-04, West region, $7,200
-- 2025-01-05, North region, $6,800
-
-Call the analyze_sales_data function with this data in TSON format.
-```
-
-**Expected output:**
-```
-analyze_sales_data("{@date,region,sales#5|2025-01-01,North,5000|2025-01-02,South,6000|2025-01-03,East,5500|2025-01-04,West,7200|2025-01-05,North,6800}")
-```
-
----
-
-## Shortened System Prompt (Minimal Version)
-
-**For when you need to save system prompt tokens:**
+For saving system prompt tokens:
 
 ```
 TSON format (compact JSON):
 • Object: {@k1,k2|v1,v2}
-• Array: [v1,v2,v3]
+• Array: [v1,v2]
 • Table: {@k1,k2#N|v1,v2|v1,v2}
-• Nested: {@k,sub(@sk1,sk2)|v,{sv1,sv2}}
+• Nested: {@k,sub(@sk)|v,{sv}}
+• Quote if contains: , | @ # { } [ ] ( ) " space
 
 Examples:
 {@id,name#2|1,Alice|2,Bob} = [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]
 {@x,y|5,10} = {"x":5,"y":10}
-[1,2,3] = [1,2,3]
 ```
 
 ---
 
-## Best Practices for Prompting
+## Conversion Prompts
 
-### DO:
-✅ Provide 2-3 examples in system prompt
-✅ Use nested schema notation for repeated structures
-✅ Include #N row counts when generating TSON
-✅ Specify "Return as TSON" or "Return as JSON" explicitly
+### TSON → JSON
 
-### DON'T:
-❌ Mix TSON and JSON in same data structure
-❌ Expect perfect syntax on first try (use validation)
-❌ Use TSON for tiny data (<100 tokens)
-❌ Forget to quote strings with special characters
+```
+Convert this TSON to JSON:
+
+{@id,name,email#3|1,Alice,alice@example.com|2,Bob,bob@example.com|3,Carol,carol@example.com}
+```
+
+**Expected output:**
+```json
+[
+  {"id": 1, "name": "Alice", "email": "alice@example.com"},
+  {"id": 2, "name": "Bob", "email": "bob@example.com"},
+  {"id": 3, "name": "Carol", "email": "carol@example.com"}
+]
+```
+
+### JSON → TSON
+
+```
+Convert this JSON to TSON:
+
+[
+  {"id": 1, "name": "Alice", "email": "alice@example.com"},
+  {"id": 2, "name": "Bob", "email": "bob@example.com"}
+]
+```
+
+**Expected output:**
+```
+{@id,name,email#2|1,Alice,alice@example.com|2,Bob,bob@example.com}
+```
 
 ---
 
-## Testing Your Model
+## Task Prompts
 
-**Quick test prompt:**
+### Data Analysis with TSON Input
 
 ```
-Test 1: Parse this TSON and tell me how many records there are:
+Here is employee data in TSON format:
+
+{@id,name,dept,salary#5|1,Alice,Engineering,120000|2,Bob,Sales,95000|3,Carol,Engineering,115000|4,Dave,Marketing,85000|5,Eve,Engineering,125000}
+
+Question: What is the average salary for Engineering department?
+```
+
+**Expected output:**
+```
+Engineering employees: Alice ($120,000), Carol ($115,000), Eve ($125,000)
+Average: $120,000
+```
+
+### Generate TSON Output
+
+```
+Create sample product data with fields: id, name, price, in_stock.
+Generate 4 products. Return in TSON format.
+```
+
+**Expected output:**
+```
+{@id,name,price,in_stock#4|1,Widget,29.99,true|2,Gadget,49.99,true|3,Gizmo,19.99,false|4,Thingamajig,39.99,true}
+```
+
+---
+
+## Edge Case Prompts
+
+### Special Characters in Values
+
+```
+Convert to TSON:
+
+{
+  "path": "C:\\Users\\Documents",
+  "message": "He said \"hello\"",
+  "list": "a,b,c"
+}
+```
+
+**Expected output:**
+```
+{@path,message,list|"C:\\Users\\Documents","He said \"hello\"","a,b,c"}
+```
+
+### Special Characters in Keys
+
+```
+Convert to TSON:
+
+{
+  "key,with,commas": "value1",
+  "key|with|pipes": "value2",
+  "normal_key": "value3"
+}
+```
+
+**Expected output:**
+```
+{@"key,with,commas","key|with|pipes",normal_key|value1,value2,value3}
+```
+
+### Nested Schema with Special Keys
+
+```
+Convert to TSON:
+
+[
+  {"id": 1, "data": {"field,one": "a", "field|two": "b"}},
+  {"id": 2, "data": {"field,one": "c", "field|two": "d"}}
+]
+```
+
+**Expected output:**
+```
+{@id,data(@"field,one","field|two")#2|1,{a,b}|2,{c,d}}
+```
+
+### Preserving String vs Number Types
+
+```
+Convert to TSON, preserving types:
+
+{"zip_code": "10001", "count": 10001, "version": "1.0", "price": 1.0}
+```
+
+**Expected output:**
+```
+{@zip_code,count,version,price|"10001",10001,"1.0",1.0}
+```
+
+---
+
+## Function Calling Prompts
+
+### TSON as Function Parameter
+
+```
+You have access to a function that accepts TSON data:
+
+analyze_data(data: TSON string) -> results
+
+User: I have sales data:
+- 2025-01-01: North $5000
+- 2025-01-02: South $6000
+- 2025-01-03: East $5500
+
+Call analyze_data with this data.
+```
+
+**Expected output:**
+```
+analyze_data("{@date,region,sales#3|2025-01-01,North,5000|2025-01-02,South,6000|2025-01-03,East,5500}")
+```
+
+---
+
+## Test Prompts
+
+### Quick Validation Test
+
+```
+Test 1: How many records in this TSON?
 {@id,name#3|1,Alice|2,Bob|3,Carol}
 
-Test 2: Convert this JSON to TSON:
+Test 2: Convert to TSON:
 [{"x": 10, "y": 20}, {"x": 30, "y": 40}]
 
-Test 3: What is the value of the "name" field in the second record?
+Test 3: What is "name" in the 2nd record?
 {@id,name,age#3|1,Alice,30|2,Bob,25|3,Carol,35}
 ```
 
 **Expected answers:**
 ```
-Test 1: There are 3 records
+Test 1: 3 records
 Test 2: {@x,y#2|10,20|30,40}
 Test 3: Bob
 ```
 
+### Edge Case Validation
+
+```
+Verify these TSON strings are correct:
+
+1. Key with parentheses: {@"func()"|value}
+2. Backslash in value: {@path|"C:\\Users"}
+3. Quote in value: {@msg|"He said \"hi\""}
+4. Nested schema special keys: {@id,info(@"a,b")#1|1,{val}}
+
+For each, show the equivalent JSON.
+```
+
+**Expected:**
+```
+1. {"func()": "value"}
+2. {"path": "C:\\Users"}
+3. {"msg": "He said \"hi\""}
+4. [{"id": 1, "info": {"a,b": "val"}}]
+```
+
 ---
 
-## Token Savings Example
+## Best Practices
 
-**Before (JSON):**
-```
-Prompt: "Analyze this data: [{"id":1,"name":"Alice","dept":"Eng"},{"id":2,"name":"Bob","dept":"Sales"},...]"
-Tokens: ~45 per 3 records
-```
+### DO ✅
+- Provide 2-3 examples in prompts
+- Use `#N` row counts for clarity
+- Specify "Return as TSON" or "Return as JSON"
+- Quote strings with special characters
+- Escape quotes and backslashes properly
 
-**After (TSON):**
+### DON'T ❌
+- Mix TSON and JSON in same structure
+- Use TSON for tiny data (<100 tokens)
+- Forget to quote strings with delimiters
+- Assume unquoted strings with @ or # are valid
+
+---
+
+## Token Savings Comparison
+
+**JSON (verbose):**
+```json
+[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"},{"id":3,"name":"Carol"}]
 ```
-System: "Data in TSON format..." (300 tokens, cached)
-Prompt: "Analyze: {@id,name,dept#3|1,Alice,Eng|2,Bob,Sales|...}"
-Tokens: ~25 per 3 records (45% savings on data)
+~65 characters
+
+**TSON (compact):**
 ```
+{@id,name#3|1,Alice|2,Bob|3,Carol}
+```
+~35 characters (46% smaller)
 
 **Savings scale with data size!**
 
 ---
 
-## Ready-to-Use Prompt Template
+## Python Template
 
 ```python
 SYSTEM_PROMPT = """
@@ -379,28 +336,20 @@ You work with TSON (Token-efficient Structured Object Notation).
 
 Syntax:
 • {@key1,key2|val1,val2} = object
-• [@key1,key2#N|v1,v2|v1,v2} = array of objects
+• {@key1,key2#N|v1,v2|v1,v2} = array of objects
 • [v1,v2,v3] = array
+• Quote strings containing: , | @ # { } [ ] ( ) " space
 
 Examples:
 {@name,age|Alice,30} = {"name":"Alice","age":30}
 {@id,name#2|1,Alice|2,Bob} = [{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}]
-{@id,address(@city,zip)|1,{NYC,10001}} = [{"id":1,"address":{"city":"NYC","zip":10001}}]
 """
 
-USER_PROMPT_TSON_TO_JSON = """
-Convert to JSON:
+def convert_to_tson_prompt(json_data):
+    return f"Convert to TSON:\n\n{json_data}"
 
-TSON: {your_tson_here}
-JSON:
-"""
-
-USER_PROMPT_JSON_TO_TSON = """
-Convert to TSON:
-
-JSON: {your_json_here}
-TSON:
-"""
+def convert_to_json_prompt(tson_data):
+    return f"Convert to JSON:\n\n{tson_data}"
 ```
 
 ---

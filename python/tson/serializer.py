@@ -175,7 +175,14 @@ def serialize_tabular(arr: List[Dict]) -> str:
         # Add nested schema notation if applicable
         if key in nested_schemas:
             schema_keys = nested_schemas[key]
-            schema_str = ','.join(schema_keys)
+            # Quote schema keys that need quoting (contain special chars)
+            formatted_schema_keys = []
+            for sk in schema_keys:
+                if needs_quoting(sk):
+                    formatted_schema_keys.append(f'"{escape_string(sk)}"')
+                else:
+                    formatted_schema_keys.append(sk)
+            schema_str = ','.join(formatted_schema_keys)
             key_str = f'{key_str}(@{schema_str})'
 
         key_parts.append(key_str)
