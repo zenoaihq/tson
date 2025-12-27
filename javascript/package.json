@@ -1,6 +1,6 @@
 {
   "name": "@zenoaihq/tson",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Token-efficient Structured Object Notation – a compact serialization format designed for efficient data exchange with LLMs",
   "type": "module",
   "main": "./dist/index.cjs",

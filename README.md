@@ -217,7 +217,7 @@ Copyright (c) 2025 Zeno AI
 
 ---
 
-**Version:** 1.0.1
+**Version:** 1.0.2
 **Status:** Production Ready (Python & JavaScript)
 
 *Built for efficiency. Optimized for LLMs.*

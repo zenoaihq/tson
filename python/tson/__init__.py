@@ -18,7 +18,7 @@ Key features:
     - LLM-friendly: Clear structure that models can parse and generate
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "TSON Contributors"
 __license__ = "MIT"
 

@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="tson",
-    version="1.0.1",
+    version="1.0.2",
     author="Zeno AI",
     author_email="shubham@zenoai.tech",
     description="Token-efficient Structured Object Notation for LLMs",

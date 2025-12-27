@@ -455,7 +455,7 @@ MIT License - see [LICENSE](../LICENSE) file for details.
 ---
 
 **Package:** `@zenoaihq/tson`
-**Version:** 1.0.1
+**Version:** 1.0.2
 **Status:** Production Ready
 **Node.js:** 16.0.0+
 **TypeScript:** 5.3+
