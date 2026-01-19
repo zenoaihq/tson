@@ -114,14 +114,21 @@ Equivalent JSON:
 
 ### 4. Nested Schema Notation
 
-For arrays of objects containing nested objects with uniform structure:
+For objects/arrays containing nested objects with uniform structure:
 
-**Format:**
+**Nested Object Format:**
 ```
 {@key1,nested_key(@subkey1,subkey2)#N|value,{subval1,subval2}|...}
 ```
 
-**Example:**
+**Nested Array Format (NEW in v1.1):**
+```
+{@key1,items(@subkey1,subkey2#M)#N|value,[{sv1,sv2},{sv1,sv2}]|...}
+```
+
+When a field contains an **array of objects** with uniform structure, the count is placed **inside** the parentheses to avoid ambiguity with the top-level row count.
+
+**Example - Nested Object:**
 ```
 {@id,address(@city,zip)#2|1,{NYC,"10001"}|2,{LA,"90001"}}
 ```
@@ -134,10 +141,24 @@ Equivalent JSON:
 ]
 ```
 
+**Example - Nested Array (NEW):**
+```
+{@name,items(@id,val#2)#2|Alice,[{1,a},{2,b}]|Bob,[{3,c},{4,d}]}
+```
+
+Equivalent JSON:
+```json
+[
+  {"name": "Alice", "items": [{"id": 1, "val": "a"}, {"id": 2, "val": "b"}]},
+  {"name": "Bob", "items": [{"id": 3, "val": "c"}, {"id": 4, "val": "d"}]}
+]
+```
+
 **How It Works:**
-1. `address(@city,zip)` declares that `address` contains objects with `city` and `zip` keys
-2. In row data: `{NYC,"10001"}` is interpreted using that schema
-3. No need to repeat key declarations for each row
+1. `items(@id,val#2)` declares that `items` is an **array of 2 objects** with `id` and `val` keys
+2. The `#2` is **inside** the parentheses → nested array count
+3. In row data: `[{1,a},{2,b}]` uses **brackets** (not pipes) to avoid conflict with row separator
+4. No key repetition - schema declared once in header
 
 **Nested Schema Keys with Special Characters:**
 ```
@@ -158,7 +179,7 @@ Keys within nested schemas that contain special characters must be quoted.
 | `]` | End array | Yes |
 | `@` | Object marker | Yes |
 | `,` | Value separator | Yes |
-| `|` | Row separator | Yes |
+| `\|` | Row separator | Yes |
 | `#` | Count marker | Yes |
 | `"` | String quote | Yes (use `\"`) |
 | `(` | Schema notation | Yes |
@@ -350,7 +371,16 @@ JSON: [
 ]
 ```
 
-### Example 7: Complex Real-World
+### Example 7: Nested Array (v1.1)
+```
+TSON: {@name,orders(@product,qty#2)#2|Alice,[{Apple,5},{Banana,3}]|Bob,[{Orange,2},{Grape,4}]}
+JSON: [
+  {"name": "Alice", "orders": [{"product": "Apple", "qty": 5}, {"product": "Banana", "qty": 3}]},
+  {"name": "Bob", "orders": [{"product": "Orange", "qty": 2}, {"product": "Grape", "qty": 4}]}
+]
+```
+
+### Example 8: Complex Real-World
 ```
 TSON: {@company,employees|Acme,{@id,name,skills#2|1,Alice,[Python,Go]|2,Bob,[Java]}}
 JSON: {
@@ -367,21 +397,23 @@ JSON: {
 ## Grammar (Informal BNF)
 
 ```
-document   := value
-value      := object | array | primitive
-object     := "{@" keys "|" values "}" | "{@}"
-array      := "[" values "]" | "[]"
-keys       := key ("," key)* ("#" count)?
-key        := identifier | quoted_string | identifier "(@" schema_keys ")"
+document    := value
+value       := object | array | primitive
+object      := "{@" keys "|" values "}" | "{@}"
+array       := "[" values "]" | "[]"
+keys        := key ("," key)* ("#" count)?
+key         := identifier | quoted_string | identifier "(@" schema_keys ("#" count)? ")"
 schema_keys := key ("," key)*
-values     := value ("," value)* ("|" value ("," value)*)*
-primitive  := string | number | boolean | null
-string     := unquoted_string | '"' escaped_chars '"'
-number     := integer | float
-boolean    := "true" | "false"
-null       := "null"
-count      := digit+
+values      := value ("," value)* ("|" value ("," value)*)*
+primitive   := string | number | boolean | null
+string      := unquoted_string | '"' escaped_chars '"'
+number      := integer | float
+boolean     := "true" | "false"
+null        := "null"
+count       := digit+
 ```
+
+**Note:** The `#count` inside parentheses for nested schemas indicates a nested array.
 
 ---
 
@@ -430,8 +462,8 @@ All TSON converts losslessly:
 
 ---
 
-**Version:** 1.1
-**Date:** 2025-12-27
+**Version:** 1.2
+**Date:** 2026-01-18
 **Status:** Stable
 
 *Built for efficiency. Optimized for LLMs.*

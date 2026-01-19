@@ -174,7 +174,10 @@ def serialize_tabular(arr: List[Dict]) -> str:
 
         # Add nested schema notation if applicable
         if key in nested_schemas:
-            schema_keys = nested_schemas[key]
+            schema_info = nested_schemas[key]
+            schema_keys = schema_info['schema']
+            nested_count = schema_info['count']
+            
             # Quote schema keys that need quoting (contain special chars)
             formatted_schema_keys = []
             for sk in schema_keys:
@@ -183,7 +186,12 @@ def serialize_tabular(arr: List[Dict]) -> str:
                 else:
                     formatted_schema_keys.append(sk)
             schema_str = ','.join(formatted_schema_keys)
-            key_str = f'{key_str}(@{schema_str})'
+            
+            # Add #N inside parentheses for nested arrays
+            if nested_count is not None:
+                key_str = f'{key_str}(@{schema_str}#{nested_count})'
+            else:
+                key_str = f'{key_str}(@{schema_str})'
 
         key_parts.append(key_str)
 
@@ -196,9 +204,15 @@ def serialize_tabular(arr: List[Dict]) -> str:
         for key in keys:
             value = obj[key]
 
-            # If this key has a nested schema, serialize as schematized object
+            # If this key has a nested schema, serialize according to type
             if key in nested_schemas:
-                value_parts.append(serialize_schematized_object(value, nested_schemas[key]))
+                schema_info = nested_schemas[key]
+                if schema_info['count'] is not None:
+                    # Nested array - serialize as bracket-wrapped array
+                    value_parts.append(serialize_schematized_array(value, schema_info['schema']))
+                else:
+                    # Nested object - serialize as schematized object
+                    value_parts.append(serialize_schematized_object(value, schema_info['schema']))
             else:
                 value_parts.append(serialize_value(value))
 
@@ -209,19 +223,22 @@ def serialize_tabular(arr: List[Dict]) -> str:
     return f'{{@{keys_str}#{count}|{rows_str}}}'
 
 
-def detect_nested_schemas(arr: List[Dict], keys: List[str]) -> Dict[str, List[str]]:
+def detect_nested_schemas(arr: List[Dict], keys: List[str]) -> Dict[str, dict]:
     """
-    Detect if any fields contain uniform nested objects that can use schema notation.
+    Detect if any fields contain uniform nested objects or arrays that can use schema notation.
 
-    For each key, checks if all values are dictionaries with identical keys.
-    If so, that field can use nested schema notation.
+    For each key, checks if all values are:
+    - Dictionaries with identical keys -> single nested object
+    - Uniform arrays of dicts with identical keys -> nested array
 
     Args:
         arr: Array of objects
         keys: List of keys to check
 
     Returns:
-        Dictionary mapping key names to their nested schemas
+        Dictionary mapping key names to {'schema': [...], 'count': N or None}
+        - count is None for single nested objects
+        - count is the array length for uniform nested arrays
     """
     nested_schemas = {}
 
@@ -229,20 +246,48 @@ def detect_nested_schemas(arr: List[Dict], keys: List[str]) -> Dict[str, List[st
         # Get all values for this key
         values = [obj[key] for obj in arr]
 
-        # Check if all values are dicts
-        if not all(isinstance(v, dict) for v in values):
+        # Check if all values are dicts (nested object)
+        if all(isinstance(v, dict) for v in values):
+            if len(values) == 0:
+                continue
+
+            first_keys = list(values[0].keys())
+            if all(list(v.keys()) == first_keys for v in values[1:]):
+                # This field can use nested schema (single object)
+                nested_schemas[key] = {'schema': first_keys, 'count': None}
             continue
 
-        # Check if all dicts have the same keys
-        if len(values) == 0:
-            continue
+        # Check if all values are uniform arrays of dicts (nested array)
+        if all(isinstance(v, list) for v in values):
+            if len(values) == 0:
+                continue
 
-        first_keys = list(values[0].keys())
-        if not all(list(v.keys()) == first_keys for v in values[1:]):
-            continue
+            # Check if all arrays have objects with the same keys
+            all_uniform = True
+            first_schema = None
+            array_count = None
 
-        # This field can use nested schema
-        nested_schemas[key] = first_keys
+            for v in values:
+                if not is_uniform_object_array(v):
+                    all_uniform = False
+                    break
+                
+                if len(v) == 0:
+                    continue
+                    
+                v_schema = list(v[0].keys())
+                v_count = len(v)
+
+                if first_schema is None:
+                    first_schema = v_schema
+                    array_count = v_count
+                elif v_schema != first_schema or v_count != array_count:
+                    all_uniform = False
+                    break
+
+            if all_uniform and first_schema is not None:
+                # This field can use nested array schema
+                nested_schemas[key] = {'schema': first_schema, 'count': array_count}
 
     return nested_schemas
 
@@ -273,3 +318,29 @@ def serialize_schematized_object(obj: Dict, schema: List[str]) -> str:
         value_parts.append(serialize_value(value))
 
     return '{' + ','.join(value_parts) + '}'
+
+
+def serialize_schematized_array(arr: List[Dict], schema: List[str]) -> str:
+    """
+    Serialize an array of objects using a pre-declared schema.
+
+    Format: [{value1,value2},{value1,value2},...] (bracket-wrapped, comma-separated)
+
+    Uses brackets to avoid conflict with the pipe separator used for top-level rows.
+
+    Args:
+        arr: List of dictionaries to serialize
+        schema: List of keys in order
+
+    Returns:
+        TSON string with bracket-wrapped array of schematized objects
+    """
+    if not arr:
+        return '[]'
+
+    # Serialize each object in the array
+    obj_parts = []
+    for obj in arr:
+        obj_parts.append(serialize_schematized_object(obj, schema))
+
+    return '[' + ','.join(obj_parts) + ']'

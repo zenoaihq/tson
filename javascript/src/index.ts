@@ -11,6 +11,22 @@
 export { dumps, dump } from './serializer';
 export { loads, load } from './deserializer';
 
+// Export formatting functions
+export { prettify, minify } from './prettify';
+
+// Export file I/O functions (Node.js only)
+export {
+  loadJson,
+  loadTson,
+  saveTson,
+  saveTsonString,
+  jsonToTson,
+  tsonToJson,
+  readTsonString,
+  prettifyFile,
+  minifyFile,
+} from './fileio';
+
 // Export types for TypeScript users
 export type {
   TSONValue,
@@ -18,6 +34,7 @@ export type {
   TSONArray,
   TSONObject,
   SchemaMap,
+  SchemaInfo,
   KeySchema,
   ParsedKeys,
 } from './types';

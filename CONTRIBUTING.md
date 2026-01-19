@@ -24,7 +24,7 @@ cd tson
 # Just Python 3.7+
 
 # Run tests
-python tests/test_round\ trip.py
+python tests/test_round_trip.py
 
 # Try the examples
 python examples/basic_usage.py
@@ -51,13 +51,9 @@ Before submitting a PR, ensure:
 
 Run tests:
 ```bash
-python tests/test_round\ trip.py
+python tests/test_round_trip.py
 ```
 
-Test specific TSON strings:
-```bash
-python test_tson_string.py
-```
 
 ## Documentation
 

@@ -131,13 +131,24 @@ export function parseKeyedObject(content: string): TSONValue {
   // Parse keys and extract count if present
   const { keys, count } = parseKeys(keysPart);
 
+  // Handle special case: empty key list with count (array of empty objects)
+  // e.g., {@#2|} means [{}, {}]
+  if (keys.length === 0 && count !== null) {
+    return Array.from({ length: count }, () => ({}));
+  }
+
   // Build schema map (maps field names to nested schemas)
   const schemaMap = buildSchemaMap(keys);
 
   // Get actual field names (without schema notation)
   const fieldNames = keys.map(k => parseKeySchema(k).keyName);
 
-  // If only one part, it's an error (no values)
+  // Handle empty object (no keys, no count)
+  if (keys.length === 0) {
+    return {};
+  }
+
+  // If only one part, it's an error (no values) - but only if we have keys
   if (parts.length === 1) {
     throw new Error('Invalid object format: missing values');
   }
@@ -183,11 +194,13 @@ export function parseSingleObject(
     const valueStr = values[i];
 
     // Check if this field has a nested schema
-    const schema = schemaMap[fieldName];
+    const schemaInfo = schemaMap[fieldName];
+    const schema = schemaInfo?.schema;
+    const count = schemaInfo?.count;
 
     if (schema) {
-      // Parse as schematized object
-      obj[fieldName] = parseSchematizedValue(valueStr, schema);
+      // Parse as schematized value (object or array of objects)
+      obj[fieldName] = parseSchematizedValue(valueStr, schema, count);
     } else {
       // Parse as regular value
       obj[fieldName] = parseValue(valueStr);
@@ -230,10 +243,78 @@ export function parseTabularArray(
 /**
  * Parse a value that uses a nested schema.
  *
- * The value should be in format {val1,val2} where values correspond to
- * the keys in the schema.
+ * The value can be:
+ * - A single object: {val1,val2}
+ * - An array of objects: [{val1,val2},{val1,val2}] (when expectedCount is specified)
  */
-export function parseSchematizedValue(valueStr: string, schema: string[]): TSONObject {
+export function parseSchematizedValue(
+  valueStr: string,
+  schema: string[],
+  expectedCount: number | null = null
+): TSONValue {
+  const trimmed = valueStr.trim();
+
+  // If expectedCount is specified, this is an array of objects
+  if (expectedCount !== null) {
+    return parseSchematizedArray(trimmed, schema, expectedCount);
+  }
+
+  // Otherwise, parse as single object
+  return parseSingleSchematizedObject(trimmed, schema);
+}
+
+/**
+ * Parse an array of schematized objects.
+ *
+ * Format: [{val1,val2},{val1,val2},...] (bracket-wrapped, comma-separated)
+ */
+export function parseSchematizedArray(
+  valueStr: string,
+  schema: string[],
+  expectedCount: number
+): TSONObject[] {
+  const trimmed = valueStr.trim();
+
+  // Should be wrapped in brackets
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+    throw new Error(`Schematized array must be wrapped in brackets: ${valueStr}`);
+  }
+
+  // Extract content between brackets
+  const content = trimmed.slice(1, -1).trim();
+
+  // Empty array
+  if (content.length === 0) {
+    return [];
+  }
+
+  // Split by comma to get individual objects (respecting nested braces)
+  const parts = splitByDelimiter(content, ',');
+
+  if (parts.length !== expectedCount) {
+    throw new Error(
+      `Array count mismatch: expected ${expectedCount} objects but got ${parts.length}`
+    );
+  }
+
+  const result: TSONObject[] = [];
+  for (const part of parts) {
+    const obj = parseSingleSchematizedObject(part.trim(), schema);
+    result.push(obj);
+  }
+
+  return result;
+}
+
+/**
+ * Parse a single schematized object.
+ *
+ * Format: {val1,val2}
+ */
+export function parseSingleSchematizedObject(
+  valueStr: string,
+  schema: string[]
+): TSONObject {
   const trimmed = valueStr.trim();
 
   // Should be wrapped in braces
@@ -268,17 +349,19 @@ export function parseSchematizedValue(valueStr: string, schema: string[]): TSONO
   const obj: TSONObject = {};
   for (let i = 0; i < fieldNames.length; i++) {
     const fieldName = fieldNames[i];
-    const valueStr = values[i];
+    const valStr = values[i];
 
     // Check if this field itself has a nested schema
-    const nestedSchema = nestedSchemaMap[fieldName];
+    const schemaInfo = nestedSchemaMap[fieldName];
+    const nestedSchema = schemaInfo?.schema;
+    const nestedCount = schemaInfo?.count;
 
     if (nestedSchema) {
       // Recursively parse with nested schema
-      obj[fieldName] = parseSchematizedValue(valueStr, nestedSchema);
+      obj[fieldName] = parseSchematizedValue(valStr, nestedSchema, nestedCount);
     } else {
       // Parse as regular value
-      obj[fieldName] = parseValue(valueStr);
+      obj[fieldName] = parseValue(valStr);
     }
   }
 

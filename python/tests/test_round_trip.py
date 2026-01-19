@@ -341,6 +341,36 @@ def test_nested_schema_special_char_keys():
     print("[PASS] Nested schema with special char keys")
 
 
+def test_empty_object_array():
+    """Test arrays containing empty objects (regression test for JSONSchemaBench failures)."""
+    # Single empty object in array
+    data = [{}]
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    
+    # Multiple empty objects in array
+    data = [{}, {}, {}]
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    
+    # Nested structure with default containing empty object
+    data = {
+        "title": "Test",
+        "default": [{}],
+        "items": {"type": "object"}
+    }
+    encoded = tson.dumps(data)
+    print(f"Encoded: {encoded}")
+    decoded = tson.loads(encoded)
+    assert decoded == data, f"Round-trip failed:\nOriginal: {data}\nDecoded: {decoded}"
+    
+    print("[PASS] Empty object arrays")
+
+
 def run_all_tests():
     """Run all round-trip tests."""
     print("\n" + "=" * 70)
@@ -367,6 +397,7 @@ def run_all_tests():
         test_parentheses_in_keys,
         test_double_quotes_in_values,
         test_nested_schema_special_char_keys,
+        test_empty_object_array,
     ]
 
     failed = []

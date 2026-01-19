@@ -25,10 +25,20 @@ export type TSONObject = { [key: string]: TSONValue };
 export type TSONValue = TSONPrimitive | TSONArray | TSONObject;
 
 /**
- * Schema map for nested object structures
- * Maps field names to their nested schemas (or null if no schema)
+ * Schema info for nested object/array structures
+ * - schema: nested schema keys (or null if no schema)
+ * - count: array count (or null if single object)
  */
-export type SchemaMap = Record<string, string[] | null>;
+export interface SchemaInfo {
+  schema: string[] | null;
+  count: number | null;
+}
+
+/**
+ * Schema map for nested object structures
+ * Maps field names to their schema info
+ */
+export type SchemaMap = Record<string, SchemaInfo>;
 
 /**
  * Result of parsing a key with optional schema notation
@@ -36,6 +46,7 @@ export type SchemaMap = Record<string, string[] | null>;
 export interface KeySchema {
   keyName: string;
   schema: string[] | null;
+  count: number | null;
 }
 
 /**

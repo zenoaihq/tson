@@ -302,4 +302,31 @@ describe('TSON Round-Trip Tests', () => {
 
     expect(decoded).toEqual(data);
   });
+
+  it('should handle empty object arrays', () => {
+    // Single empty object in array
+    let data = [{}];
+    let encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    let decoded = loads(encoded);
+    expect(decoded).toEqual(data);
+
+    // Multiple empty objects in array
+    data = [{}, {}, {}];
+    encoded = dumps(data);
+    console.log(`Encoded: ${encoded}`);
+    decoded = loads(encoded);
+    expect(decoded).toEqual(data);
+
+    // Nested structure with default containing empty object
+    const complexData = {
+      title: 'Test',
+      default: [{}],
+      items: { type: 'object' }
+    };
+    encoded = dumps(complexData);
+    console.log(`Encoded: ${encoded}`);
+    decoded = loads(encoded);
+    expect(decoded).toEqual(complexData);
+  });
 });

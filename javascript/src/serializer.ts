@@ -4,7 +4,7 @@
  * Converts JavaScript data structures to TSON format.
  */
 
-import type { TSONValue, TSONObject, TSONArray, SchemaMap } from './types';
+import type { TSONValue, TSONObject, TSONArray } from './types';
 import {
   formatPrimitive,
   needsQuoting,
@@ -148,7 +148,7 @@ export function serializeTabular(arr: TSONObject[]): string {
   const keys = Object.keys(arr[0]);
   const count = arr.length;
 
-  // Check if any values are objects with uniform structure (nested schema opportunity)
+  // Check if any values are objects or arrays with uniform structure (nested schema opportunity)
   const nestedSchemas = detectNestedSchemas(arr, keys);
 
   // Format keys (with nested schemas if applicable)
@@ -161,7 +161,10 @@ export function serializeTabular(arr: TSONObject[]): string {
 
     // Add nested schema notation if applicable
     if (key in nestedSchemas) {
-      const schemaKeys = nestedSchemas[key]!;
+      const schemaInfo = nestedSchemas[key];
+      const schemaKeys = schemaInfo.schema;
+      const nestedCount = schemaInfo.count;
+
       // Quote schema keys that need quoting (contain special chars)
       const formattedSchemaKeys = schemaKeys.map(sk => {
         if (needsQuoting(sk)) {
@@ -170,7 +173,13 @@ export function serializeTabular(arr: TSONObject[]): string {
         return sk;
       });
       const schemaStr = formattedSchemaKeys.join(',');
-      keyStr = `${keyStr}(@${schemaStr})`;
+
+      // Add #N inside parentheses for nested arrays
+      if (nestedCount !== null) {
+        keyStr = `${keyStr}(@${schemaStr}#${nestedCount})`;
+      } else {
+        keyStr = `${keyStr}(@${schemaStr})`;
+      }
     }
 
     keyParts.push(keyStr);
@@ -185,9 +194,16 @@ export function serializeTabular(arr: TSONObject[]): string {
     for (const key of keys) {
       const value = obj[key];
 
-      // If this key has a nested schema, serialize as schematized object
+      // If this key has a nested schema, serialize according to type
       if (key in nestedSchemas) {
-        valueParts.push(serializeSchematizedObject(value as TSONObject, nestedSchemas[key]!));
+        const schemaInfo = nestedSchemas[key];
+        if (schemaInfo.count !== null) {
+          // Nested array - serialize as bracket-wrapped array
+          valueParts.push(serializeSchematizedArray(value as TSONObject[], schemaInfo.schema));
+        } else {
+          // Nested object - serialize as schematized object
+          valueParts.push(serializeSchematizedObject(value as TSONObject, schemaInfo.schema));
+        }
       } else {
         valueParts.push(serializeValue(value));
       }
@@ -201,40 +217,94 @@ export function serializeTabular(arr: TSONObject[]): string {
 }
 
 /**
- * Detect if any fields contain uniform nested objects that can use schema notation.
- *
- * For each key, checks if all values are objects with identical keys.
- * If so, that field can use nested schema notation.
+ * Nested schema info for serialization
  */
-export function detectNestedSchemas(arr: TSONObject[], keys: string[]): SchemaMap {
-  const nestedSchemas: SchemaMap = {};
+interface NestedSchemaInfo {
+  schema: string[];
+  count: number | null;
+}
+
+type NestedSchemaMap = Record<string, NestedSchemaInfo>;
+
+/**
+ * Detect if any fields contain uniform nested objects or arrays that can use schema notation.
+ *
+ * For each key, checks if all values are:
+ * - Objects with identical keys -> single nested object
+ * - Uniform arrays of objects with identical keys -> nested array
+ */
+export function detectNestedSchemas(arr: TSONObject[], keys: string[]): NestedSchemaMap {
+  const nestedSchemas: NestedSchemaMap = {};
 
   for (const key of keys) {
     // Get all values for this key
     const values = arr.map(obj => obj[key]);
 
-    // Check if all values are plain objects
-    if (!values.every(v => typeof v === 'object' && v !== null && !Array.isArray(v))) {
+    // Check if all values are plain objects (nested object)
+    if (values.every(v => typeof v === 'object' && v !== null && !Array.isArray(v))) {
+      if (values.length === 0) {
+        continue;
+      }
+
+      // Check if all objects have the same keys
+      const firstKeys = Object.keys(values[0] as TSONObject);
+      const allSame = values.slice(1).every(v => {
+        const objKeys = Object.keys(v as TSONObject);
+        return (
+          objKeys.length === firstKeys.length &&
+          objKeys.every((k, i) => k === firstKeys[i])
+        );
+      });
+
+      if (allSame) {
+        // This field can use nested object schema
+        nestedSchemas[key] = { schema: firstKeys, count: null };
+      }
       continue;
     }
 
-    if (values.length === 0) {
-      continue;
-    }
+    // Check if all values are uniform arrays of objects (nested array)
+    if (values.every(v => Array.isArray(v))) {
+      if (values.length === 0) {
+        continue;
+      }
 
-    // Check if all objects have the same keys
-    const firstKeys = Object.keys(values[0] as TSONObject);
-    const allSame = values.slice(1).every(v => {
-      const objKeys = Object.keys(v as TSONObject);
-      return (
-        objKeys.length === firstKeys.length &&
-        objKeys.every((k, i) => k === firstKeys[i])
-      );
-    });
+      // Check if all arrays have objects with the same keys and same length
+      let allUniform = true;
+      let firstSchema: string[] | null = null;
+      let arrayCount: number | null = null;
 
-    if (allSame) {
-      // This field can use nested schema
-      nestedSchemas[key] = firstKeys;
+      for (const v of values) {
+        const arr = v as TSONValue[];
+        if (!isUniformObjectArray(arr)) {
+          allUniform = false;
+          break;
+        }
+
+        if (arr.length === 0) {
+          continue;
+        }
+
+        const vSchema = Object.keys(arr[0] as TSONObject);
+        const vCount = arr.length;
+
+        if (firstSchema === null) {
+          firstSchema = vSchema;
+          arrayCount = vCount;
+        } else if (
+          vSchema.length !== firstSchema.length ||
+          !vSchema.every((k, i) => k === firstSchema![i]) ||
+          vCount !== arrayCount
+        ) {
+          allUniform = false;
+          break;
+        }
+      }
+
+      if (allUniform && firstSchema !== null) {
+        // This field can use nested array schema
+        nestedSchemas[key] = { schema: firstSchema, count: arrayCount };
+      }
     }
   }
 
@@ -262,4 +332,25 @@ export function serializeSchematizedObject(obj: TSONObject, schema: string[]): s
   }
 
   return '{' + valueParts.join(',') + '}';
+}
+
+/**
+ * Serialize an array of objects using a pre-declared schema.
+ *
+ * Format: [{value1,value2},{value1,value2},...] (bracket-wrapped, comma-separated)
+ *
+ * Uses brackets to avoid conflict with the pipe separator used for top-level rows.
+ */
+export function serializeSchematizedArray(arr: TSONObject[], schema: string[]): string {
+  if (arr.length === 0) {
+    return '[]';
+  }
+
+  // Serialize each object in the array
+  const objParts: string[] = [];
+  for (const obj of arr) {
+    objParts.push(serializeSchematizedObject(obj, schema));
+  }
+
+  return '[' + objParts.join(',') + ']';
 }

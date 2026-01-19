@@ -342,7 +342,7 @@ MIT License - see [../LICENSE](../LICENSE) file for details.
 
 ---
 
-**Version:** 1.0.2
+**Version:** 1.1.0
 **Status:** Production Ready
 **Python:** 3.7+
 **Dependencies:** None

@@ -157,13 +157,22 @@ def parse_keyed_object(content: str) -> Any:
     # Parse keys and extract count if present
     keys, count = parse_keys(keys_part)
 
+    # Handle special case: empty key list with count (array of empty objects)
+    # e.g., {@#2|} means [{}, {}]
+    if len(keys) == 0 and count is not None:
+        return [{} for _ in range(count)]
+
     # Build schema map (maps field names to nested schemas)
     schema_map = build_schema_map(keys)
 
     # Get actual field names (without schema notation)
     field_names = [parse_key_schema(k)[0] for k in keys]
 
-    # If only one part, it's an error (no values)
+    # Handle empty object (no keys, no count)
+    if len(keys) == 0:
+        return {}
+
+    # If only one part, it's an error (no values) - but only if we have keys
     if len(parts) == 1:
         raise ValueError("Invalid object format: missing values")
 
@@ -244,7 +253,7 @@ def parse_single_object(field_names: List[str], values_str: str, schema_map: Dic
     Args:
         field_names: List of field names
         values_str: Comma-separated values string
-        schema_map: Map of field names to nested schemas
+        schema_map: Map of field names to {'schema': [...], 'count': N or None}
 
     Returns:
         Python dict
@@ -261,11 +270,13 @@ def parse_single_object(field_names: List[str], values_str: str, schema_map: Dic
     obj = {}
     for field_name, value_str in zip(field_names, values):
         # Check if this field has a nested schema
-        schema = schema_map.get(field_name)
+        schema_info = schema_map.get(field_name, {})
+        schema = schema_info.get('schema') if schema_info else None
+        count = schema_info.get('count') if schema_info else None
 
         if schema:
-            # Parse as schematized object
-            obj[field_name] = parse_schematized_value(value_str, schema)
+            # Parse as schematized value (object or array of objects)
+            obj[field_name] = parse_schematized_value(value_str, schema, count)
         else:
             # Parse as regular value
             obj[field_name] = parse_value(value_str)
@@ -308,22 +319,93 @@ def parse_tabular_array(field_names: List[str], row_parts: List[str],
     return result
 
 
-def parse_schematized_value(value_str: str, schema: List[str]) -> Dict:
+def parse_schematized_value(value_str: str, schema: List[str], expected_count: Optional[int] = None):
     """
     Parse a value that uses a nested schema.
 
-    The value should be in format {val1,val2} where values correspond to
-    the keys in the schema.
+    The value can be:
+    - A single object: {val1,val2}
+    - An array of objects: {val1,val2}|{val1,val2} (when expected_count is specified)
 
     Args:
-        value_str: Value string (e.g. "{NYC,10001}")
+        value_str: Value string (e.g. "{NYC,10001}" or "{a,1}|{b,2}")
         schema: List of key names or nested schema strings
+        expected_count: If specified, parse as array of this many objects
 
     Returns:
-        Python dict
+        Python dict or list of dicts (if expected_count is specified)
 
     Raises:
         ValueError: If format is invalid
+    """
+    value_str = value_str.strip()
+
+    # If expected_count is specified, this is an array of objects
+    if expected_count is not None:
+        return parse_schematized_array(value_str, schema, expected_count)
+
+    # Otherwise, parse as single object
+    return parse_single_schematized_object(value_str, schema)
+
+
+def parse_schematized_array(value_str: str, schema: List[str], expected_count: int) -> List[Dict]:
+    """
+    Parse an array of schematized objects.
+
+    Format: [{val1,val2},{val1,val2},...] (bracket-wrapped, comma-separated)
+    
+    The bracket format is used to avoid conflict with the pipe separator
+    used for top-level rows.
+
+    Args:
+        value_str: Bracket-wrapped comma-separated objects
+        schema: List of key names
+        expected_count: Expected number of objects
+
+    Returns:
+        List of Python dicts
+    """
+    value_str = value_str.strip()
+    
+    # Should be wrapped in brackets
+    if not value_str.startswith('[') or not value_str.endswith(']'):
+        raise ValueError(f"Schematized array must be wrapped in brackets: {value_str}")
+    
+    # Extract content between brackets
+    content = value_str[1:-1].strip()
+    
+    # Empty array
+    if not content:
+        return []
+    
+    # Split by comma to get individual objects (respecting nested braces)
+    parts = split_by_delimiter(content, ',')
+
+    if len(parts) != expected_count:
+        raise ValueError(
+            f"Array count mismatch: expected {expected_count} objects but got {len(parts)}"
+        )
+
+    result = []
+    for part in parts:
+        obj = parse_single_schematized_object(part.strip(), schema)
+        result.append(obj)
+
+    return result
+
+
+def parse_single_schematized_object(value_str: str, schema: List[str]) -> Dict:
+    """
+    Parse a single schematized object.
+
+    Format: {val1,val2}
+
+    Args:
+        value_str: Brace-wrapped comma-separated values
+        schema: List of key names
+
+    Returns:
+        Python dict
     """
     value_str = value_str.strip()
 
@@ -354,16 +436,18 @@ def parse_schematized_value(value_str: str, schema: List[str]) -> Dict:
 
     # Build object
     obj = {}
-    for field_name, value_str, schema_key in zip(field_names, values, schema):
+    for field_name, val_str, schema_key in zip(field_names, values, schema):
         # Check if this field itself has a nested schema
-        nested_schema = nested_schema_map.get(field_name)
+        schema_info = nested_schema_map.get(field_name, {})
+        nested_schema = schema_info.get('schema') if schema_info else None
+        nested_count = schema_info.get('count') if schema_info else None
 
         if nested_schema:
             # Recursively parse with nested schema
-            obj[field_name] = parse_schematized_value(value_str, nested_schema)
+            obj[field_name] = parse_schematized_value(val_str, nested_schema, nested_count)
         else:
             # Parse as regular value
-            obj[field_name] = parse_value(value_str)
+            obj[field_name] = parse_value(val_str)
 
     return obj
 

@@ -320,25 +320,28 @@ export function splitByDelimiter(text: string, delimiter: string): string[] {
 }
 
 /**
- * Parse a key which may include nested schema notation.
+ * Parse a key which may include nested schema notation and optional array count.
+ *
+ * The array count can be specified INSIDE the parentheses to avoid ambiguity:
+ * - `key(@schema#N)` means key is an array of N objects with the given schema
+ * - `key(@schema)` means key is a single object with the given schema
  *
  * Examples:
- *   "name" -> { keyName: "name", schema: null }
- *   "address(@city,zip)" -> { keyName: "address", schema: ["city", "zip"] }
- *   "location(@coords(@lat,lng))" -> { keyName: "location", schema: ["coords(@lat,lng)"] }
+ *   "name" -> { keyName: "name", schema: null, count: null }
+ *   "address(@city,zip)" -> { keyName: "address", schema: ["city", "zip"], count: null }
+ *   "characters(@name,role#2)" -> { keyName: "characters", schema: ["name", "role"], count: 2 }
  */
 export function parseKeySchema(keyString: string): KeySchema {
   const trimmed = keyString.trim();
 
   // If the entire key is quoted, it's a simple key (any parens inside are literal)
-  // Must check this BEFORE looking for '(' to handle keys like "company("
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return { keyName: unescapeString(trimmed.slice(1, -1)), schema: null };
+    return { keyName: unescapeString(trimmed.slice(1, -1)), schema: null, count: null };
   }
 
   // Check if key has nested schema (only for unquoted keys)
   if (!trimmed.includes('(')) {
-    return { keyName: trimmed, schema: null };
+    return { keyName: trimmed, schema: null, count: null };
   }
 
   // Find the opening parenthesis
@@ -362,25 +365,82 @@ export function parseKeySchema(keyString: string): KeySchema {
     schemaStr = schemaStr.slice(1);
   }
 
+  // Check for array count at the END of the schema (inside parentheses)
+  let nestedCount: number | null = null;
+  const hashIdx = findTrailingHash(schemaStr);
+  if (hashIdx !== -1) {
+    const countPart = schemaStr.slice(hashIdx + 1).trim();
+    const parsedCount = parseInt(countPart, 10);
+    if (!isNaN(parsedCount)) {
+      nestedCount = parsedCount;
+      schemaStr = schemaStr.slice(0, hashIdx).trim();
+    }
+  }
+
   // Split schema by commas (respecting nested parentheses)
   const schemaKeys = splitByDelimiter(schemaStr, ',');
 
-  return { keyName, schema: schemaKeys };
+  return { keyName, schema: schemaKeys, count: nestedCount };
 }
 
 /**
- * Build a mapping of field names to their nested schemas.
+ * Find the position of a trailing #N in a schema string.
+ * Only finds # that is NOT inside quotes or nested parentheses.
+ */
+function findTrailingHash(schemaStr: string): number {
+  let inQuotes = false;
+  let depthParen = 0;
+
+  // Scan backwards to find the last # that is outside quotes and parens
+  for (let i = schemaStr.length - 1; i >= 0; i--) {
+    const char = schemaStr[i];
+
+    if (char === '"') {
+      // Check for escaped quote
+      let backslashCount = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        if (schemaStr[j] === '\\') {
+          backslashCount++;
+        } else {
+          break;
+        }
+      }
+      if (backslashCount % 2 === 0) {
+        inQuotes = !inQuotes;
+      }
+    }
+
+    if (!inQuotes) {
+      if (char === ')') {
+        depthParen++;
+      } else if (char === '(') {
+        depthParen--;
+      } else if (char === '#' && depthParen === 0) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Build a mapping of field names to their nested schemas and array counts.
  *
  * Example:
- *   ["id", "address(@city,zip)"]
- *   -> { id: null, address: ["city", "zip"] }
+ *   ["id", "address(@city,zip)", "items(@x,y#2)"]
+ *   -> {
+ *     id: { schema: null, count: null },
+ *     address: { schema: ["city", "zip"], count: null },
+ *     items: { schema: ["x", "y"], count: 2 }
+ *   }
  */
 export function buildSchemaMap(keys: string[]): SchemaMap {
   const schemaMap: SchemaMap = {};
 
   for (const key of keys) {
-    const { keyName, schema } = parseKeySchema(key);
-    schemaMap[keyName] = schema;
+    const { keyName, schema, count } = parseKeySchema(key);
+    schemaMap[keyName] = { schema, count };
   }
 
   return schemaMap;

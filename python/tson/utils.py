@@ -328,29 +328,34 @@ def split_by_delimiter(text: str, delimiter: str) -> List[str]:
 
 def parse_key_schema(key_string: str) -> tuple:
     """
-    Parse a key which may include nested schema notation.
+    Parse a key which may include nested schema notation and optional array count.
+
+    The array count can be specified INSIDE the parentheses to avoid ambiguity:
+    - `key(@schema#N)` means key is an array of N objects with the given schema
+    - `key(@schema)` means key is a single object with the given schema
 
     Examples:
-        "name" -> ("name", None)
-        "address(@city,zip)" -> ("address", ["city", "zip"])
-        "location(@coords(@lat,lng))" -> ("location", ["coords(@lat,lng)"])
+        "name" -> ("name", None, None)
+        "address(@city,zip)" -> ("address", ["city", "zip"], None)
+        "characters(@name,role#2)" -> ("characters", ["name", "role"], 2)
+        "location(@coords(@lat,lng))" -> ("location", ["coords(@lat,lng)"], None)
 
     Args:
         key_string: Key string potentially with nested schema
 
     Returns:
-        Tuple of (key_name, schema_keys or None)
+        Tuple of (key_name, schema_keys or None, count or None)
     """
     key_string = key_string.strip()
 
     # If the entire key is quoted, it's a simple key (any parens inside are literal)
     # Must check this BEFORE looking for '(' to handle keys like "company("
     if key_string.startswith('"') and key_string.endswith('"'):
-        return (unescape_string(key_string[1:-1]), None)
+        return (unescape_string(key_string[1:-1]), None, None)
 
     # Check if key has nested schema (only for unquoted keys)
     if '(' not in key_string:
-        return (key_string, None)
+        return (key_string, None, None)
 
     # Find the opening parenthesis
     paren_idx = key_string.index('(')
@@ -371,30 +376,90 @@ def parse_key_schema(key_string: str) -> tuple:
     if schema_str.startswith('@'):
         schema_str = schema_str[1:]
 
+    # Check for array count at the END of the schema (inside parentheses)
+    # Format: @field1,field2#N
+    nested_count = None
+    hash_idx = find_trailing_hash(schema_str)
+    if hash_idx != -1:
+        count_part = schema_str[hash_idx + 1:].strip()
+        try:
+            nested_count = int(count_part)
+            schema_str = schema_str[:hash_idx].strip()
+        except ValueError:
+            # Not a valid number, ignore
+            pass
+
     # Split schema by commas (respecting nested parentheses)
     schema_keys = split_by_delimiter(schema_str, ',')
 
-    return (key_name, schema_keys)
+    return (key_name, schema_keys, nested_count)
 
 
-def build_schema_map(keys: List[str]) -> Dict[str, Optional[List[str]]]:
+def find_trailing_hash(schema_str: str) -> int:
     """
-    Build a mapping of field names to their nested schemas.
+    Find the position of a trailing #N in a schema string.
+    
+    Only finds # that is NOT inside quotes or nested parentheses.
+    
+    Args:
+        schema_str: Schema string to search
+        
+    Returns:
+        Index of the # character, or -1 if not found
+    """
+    in_quotes = False
+    depth_paren = 0
+    
+    # Scan backwards to find the last # that is outside quotes and parens
+    for i in range(len(schema_str) - 1, -1, -1):
+        char = schema_str[i]
+        
+        if char == '"':
+            # Check for escaped quote
+            backslash_count = 0
+            for j in range(i - 1, -1, -1):
+                if schema_str[j] == '\\':
+                    backslash_count += 1
+                else:
+                    break
+            if backslash_count % 2 == 0:
+                in_quotes = not in_quotes
+        
+        if not in_quotes:
+            if char == ')':
+                depth_paren += 1
+            elif char == '(':
+                depth_paren -= 1
+            elif char == '#' and depth_paren == 0:
+                return i
+    
+    return -1
+
+
+def build_schema_map(keys: List[str]) -> Dict[str, dict]:
+    """
+    Build a mapping of field names to their nested schemas and array counts.
 
     Args:
         keys: List of key strings (may include nested schemas)
 
     Returns:
-        Dictionary mapping key names to their schemas (or None if no schema)
+        Dictionary mapping key names to dicts with 'schema' and 'count' keys.
+        - 'schema': List of nested schema keys, or None if no schema
+        - 'count': Integer array count, or None if not an array
 
     Example:
-        ["id", "address(@city,zip)"]
-        -> {"id": None, "address": ["city", "zip"]}
+        ["id", "address(@city,zip)", "characters(@name,role#2)"]
+        -> {
+            "id": {"schema": None, "count": None},
+            "address": {"schema": ["city", "zip"], "count": None},
+            "characters": {"schema": ["name", "role"], "count": 2}
+        }
     """
     schema_map = {}
 
     for key in keys:
-        key_name, schema = parse_key_schema(key)
-        schema_map[key_name] = schema
+        key_name, schema, count = parse_key_schema(key)
+        schema_map[key_name] = {"schema": schema, "count": count}
 
     return schema_map
